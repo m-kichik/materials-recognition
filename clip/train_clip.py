@@ -32,8 +32,8 @@ def main():
     lr = 1e-6
     n_epochs = 20
     eval_interval = 1
-    log_wandb = False
-    # log_wandb = True
+    # log_wandb = False
+    log_wandb = True
 
     if log_wandb:
         wandb_config = {
@@ -91,7 +91,7 @@ def main():
     eval_loader = DataLoader(eval_dataset, batch_size=batch_size, shuffle=True)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, betas=(0.9, 0.98))
 
-    clip_metrics = evaluate(model, eval_loader)
+    clip_metrics = evaluate(model, eval_loader, device=device)
     clip_metrics = {"pretrain/" + k: v for k, v in clip_metrics.items()}
     if wandb.run is not None:
         wandb.log(clip_metrics)
