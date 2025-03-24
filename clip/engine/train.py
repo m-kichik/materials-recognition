@@ -55,7 +55,7 @@ def train(
         log_dict = {"train/loss": total_loss / len(train_loader)}
 
         if (epoch + 1) % eval_interval == 0:
-            eval_metrics = evaluate(model, eval_loader, device=device)
+            eval_metrics, _ = evaluate(model, eval_loader, device=device)
 
             save_ckpt(
                 model,
@@ -135,7 +135,7 @@ def train_iterations(
             train_iter = iter(train_loader)
 
         if (iter_ + 1) % eval_interval == 0:
-            eval_metrics = evaluate(model, eval_loader, device=device)
+            eval_metrics, _ = evaluate(model, eval_loader, device=device)
 
             save_ckpt(
                 model,

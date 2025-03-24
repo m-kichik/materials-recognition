@@ -1,10 +1,8 @@
 import json
 import logging
 import os
-import random
 
 import clip
-from tqdm import tqdm
 
 import torch
 from torch.utils.data import DataLoader
@@ -66,19 +64,35 @@ def main():
     train_images_path = "/home/docker_user/datasets/train2017_cropped_blurred"
     val_images_path = "/home/docker_user/datasets/val2017_cropped_blurred"
 
-    with open("/home/docker_user/datasets/captions_augmented_train_no_small_final.json", "r") as f:
+    with open(
+        "/home/docker_user/datasets/captions_augmented_train_no_small_final.json", "r"
+    ) as f:
         train_data = json.load(f)
 
-    with open("/home/docker_user/datasets/captions_augmented_val_no_small_final.json", "r") as f:
+    with open(
+        "/home/docker_user/datasets/captions_augmented_val_no_small_final.json", "r"
+    ) as f:
         val_data = json.load(f)
 
     train_dataset = MaterialsDataset(train_images_path, train_data, preprocess)
     eval_dataset = MaterialsDataset(val_images_path, val_data, preprocess)
-    train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, num_workers=1, drop_last=True)
-    eval_loader = DataLoader(eval_dataset, batch_size=val_batch_size, shuffle=True, num_workers=4, drop_last=True)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=train_batch_size,
+        shuffle=True,
+        num_workers=1,
+        drop_last=True,
+    )
+    eval_loader = DataLoader(
+        eval_dataset,
+        batch_size=val_batch_size,
+        shuffle=True,
+        num_workers=4,
+        drop_last=True,
+    )
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, betas=(0.9, 0.98))
 
-    clip_metrics = evaluate(model, eval_loader, device=device)
+    clip_metrics, _ = evaluate(model, eval_loader, device=device)
     clip_metrics = {"pretrain/" + k: v for k, v in clip_metrics.items()}
     if wandb.run is not None:
         wandb.log(clip_metrics)

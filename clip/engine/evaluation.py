@@ -1,8 +1,10 @@
 """CLIP evaluation: cosine similarity, recall, MRR"""
 
 import random
+import time
 from typing import Dict, Tuple
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -35,6 +37,7 @@ def evaluate(
 
     all_ranks = []
     cosine_similarities = []
+    all_times = []
 
     with torch.no_grad():
         for images, captions in (pbar := tqdm(dataloader)):
@@ -44,8 +47,11 @@ def evaluate(
                 captions = random.choice(captions)
             text_tokens = clip.tokenize(captions).to(device)
 
+            start = time.perf_counter()
             image_features = model.encode_image(images)
             text_features = model.encode_text(text_tokens)
+            elapsed_time = time.perf_counter() - start
+            all_times.append(elapsed_time)
 
             image_features = image_features / image_features.norm(dim=-1, keepdim=True)
             text_features = text_features / text_features.norm(dim=-1, keepdim=True)
@@ -81,4 +87,4 @@ def evaluate(
             "Mean Cosine Similarity": mean_cosine_similarity,
         }
 
-        return metrics
+        return metrics, np.mean(all_times)
