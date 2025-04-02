@@ -28,12 +28,12 @@ else:
 def main():
     train_batch_size = 256
     val_batch_size = 64
-    exp_name = "clip-BIG-aug-cap-blur-no-small-lr-1e-6"
+    exp_name = "clip-BIG-only-materials-blur-no-small-lr-1e-6"
     model_name = "ViT-B/32"
     lr = 1e-6
     # n_epochs = 20
     # eval_interval = 1
-    n_iters = 100000
+    n_iters = 50000
     eval_interval = 1000
     # log_wandb = False
     log_wandb = True
@@ -66,15 +66,18 @@ def main():
     train_images_path = "/home/docker_user/datasets/train2017_cropped_blurred"
     val_images_path = "/home/docker_user/datasets/val2017_cropped_blurred"
 
-    with open("/home/docker_user/datasets/captions_augmented_train_no_small_final.json", "r") as f:
+    # with open("train.json", "r") as f:
+    # with open("/home/docker_user/datasets/captions_augmented_train_no_small_final.json", "r") as f:
+    with open("/home/docker_user/datasets/captions_material_train_no_small_final.json", "r") as f:
         train_data = json.load(f)
 
-    with open("/home/docker_user/datasets/captions_augmented_val_no_small_final.json", "r") as f:
+    # with open("/home/docker_user/datasets/captions_augmented_val_no_small_final.json", "r") as f:
+    with open("/home/docker_user/datasets/captions_material_val_no_small_final.json", "r") as f:
         val_data = json.load(f)
 
     train_dataset = MaterialsDataset(train_images_path, train_data, preprocess)
     eval_dataset = MaterialsDataset(val_images_path, val_data, preprocess)
-    train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, num_workers=1, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, num_workers=4, drop_last=True)
     eval_loader = DataLoader(eval_dataset, batch_size=val_batch_size, shuffle=True, num_workers=4, drop_last=True)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, betas=(0.9, 0.98))
 
