@@ -23,6 +23,7 @@ def train(
     eval_interval: int = 5,
     device: str = "cpu",
     model_name: str = "",
+    freeze_text: bool = False,
     save_path: str = "clip_train",
 ) -> None:
     best_metrics = {
@@ -40,9 +41,14 @@ def train(
             text_tokens = clip.tokenize(captions).to(device)
 
             image_features = model.encode_image(images)
-            text_features = model.encode_text(text_tokens)
+            
+            if freeze_text:
+                with torch.no_grad():
+                    text_features = model.encode_text(text_tokens)
+            else:
+                text_features = model.encode_text(text_tokens)
 
-            loss = clip_loss(image_features, text_features)
+            loss = clip_loss(image_features, text_features, freeze_text=freeze_text)
 
             optimizer.zero_grad()
             loss.backward()
@@ -55,7 +61,7 @@ def train(
         log_dict = {"train/loss": total_loss / len(train_loader)}
 
         if (epoch + 1) % eval_interval == 0:
-            eval_metrics = evaluate(model, eval_loader, device=device)
+            eval_metrics, _ = evaluate(model, eval_loader, device=device)
 
             save_ckpt(
                 model,
@@ -95,6 +101,7 @@ def train_iterations(
     eval_interval: int = 5,
     device: str = "cpu",
     model_name: str = "",
+    freeze_text: bool = False,
     save_path: str = "clip_train",
 ) -> None:
     best_metrics = {
@@ -109,6 +116,7 @@ def train_iterations(
     # random permutations are applied in __iter__ of the loader.
     train_iter = iter(train_loader)
     for iter_ in (pbar := tqdm(range(n_iterations))):
+        model.train()
         try:
             images, captions = next(train_iter)
             images = images.to(device)
@@ -117,9 +125,13 @@ def train_iterations(
             text_tokens = clip.tokenize(captions).to(device)
 
             image_features = model.encode_image(images)
-            text_features = model.encode_text(text_tokens)
+            if freeze_text:
+                with torch.no_grad():
+                    text_features = model.encode_text(text_tokens)
+            else:
+                text_features = model.encode_text(text_tokens)
 
-            loss = clip_loss(image_features, text_features)
+            loss = clip_loss(image_features, text_features, freeze_text=freeze_text)
 
             optimizer.zero_grad()
             loss.backward()
@@ -135,7 +147,7 @@ def train_iterations(
             train_iter = iter(train_loader)
 
         if (iter_ + 1) % eval_interval == 0:
-            eval_metrics = evaluate(model, eval_loader, device=device)
+            eval_metrics, _ = evaluate(model, eval_loader, device=device)
 
             save_ckpt(
                 model,

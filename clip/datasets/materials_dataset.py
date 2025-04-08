@@ -23,6 +23,7 @@ class MaterialsDataset(Dataset):
         self,
         image_dir: str,
         captions: Union[str, List[Dict[str, str]]],
+        add_materials_prefix: bool = False,
         preprocess: Callable = None,
     ):
         """
@@ -32,12 +33,14 @@ class MaterialsDataset(Dataset):
             image_dir (str): Path to the directory containing images.
             captions (Union[str, List[Dict[str, str]]]): Either a path to a JSON file containing image-caption pairs
                                                          or a list of dictionaries with keys 'image' and 'caption'.
+            add_materials_prefix (bool): if True, adds "an object made of " to the caption. 
             preprocess (Callable): A function to preprocess images before returning them.
 
         Raises:
             ValueError: If captions is not a string (JSON file path) or a list.
         """
         self.image_dir = image_dir
+        self.add_materials_prefix = add_materials_prefix
         self.preprocess = preprocess
 
         if isinstance(captions, str):
@@ -75,6 +78,8 @@ class MaterialsDataset(Dataset):
         if self.preprocess is not None:
             image = self.preprocess(image)
 
-        caption = self.data[idx]["caption"]
+        caption = self.data[idx]["caption"].lower().strip()
+        if self.add_materials_prefix:
+            caption = "an object made of " + caption
 
         return image, caption

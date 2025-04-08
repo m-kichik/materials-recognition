@@ -1,10 +1,8 @@
 import json
 import logging
 import os
-import random
 
 import clip
-from tqdm import tqdm
 
 import torch
 from torch.utils.data import DataLoader
@@ -18,7 +16,7 @@ from utils import set_seed
 set_seed(0)
 
 if torch.cuda.is_available():
-    device = torch.device("cuda:0")
+    device = torch.device("cuda:1")
 elif torch.mps.is_available():
     device = torch.device("mps")
 else:
@@ -26,15 +24,21 @@ else:
 
 
 def main():
-    train_batch_size = 256
-    val_batch_size = 64
-    exp_name = "clip-BIG-only-materials-blur-no-small-lr-1e-6"
+    train_batch_size = 32
+    val_batch_size = 32
+    exp_name = "clip-BIG-freeze-text-only-materials-blur-no-small-small-batch-lr-1e-6"
     model_name = "ViT-B/32"
     lr = 1e-6
     # n_epochs = 20
     # eval_interval = 1
-    n_iters = 50000
-    eval_interval = 1000
+    # n_iters = 50000
+    n_iters = 200000
+    # eval_interval = 1000
+    eval_interval = 4000
+    # freeze_text = False
+    freeze_text = True
+    add_materials_prefix = False
+    add_materials_prefix = True
     # log_wandb = False
     log_wandb = True
 
@@ -77,11 +81,25 @@ def main():
 
     train_dataset = MaterialsDataset(train_images_path, train_data, preprocess)
     eval_dataset = MaterialsDataset(val_images_path, val_data, preprocess)
-    train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, num_workers=4, drop_last=True)
-    eval_loader = DataLoader(eval_dataset, batch_size=val_batch_size, shuffle=True, num_workers=4, drop_last=True)
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=train_batch_size,
+        shuffle=True,
+        num_workers=4,
+        drop_last=True,
+    )
+    eval_loader = DataLoader(
+        eval_dataset,
+        batch_size=val_batch_size,
+        shuffle=True,
+        num_workers=4,
+        drop_last=True,
+    )
+
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, betas=(0.9, 0.98))
 
-    clip_metrics = evaluate(model, eval_loader, device=device)
+    clip_metrics, _ = evaluate(model, eval_loader, device=device)
     clip_metrics = {"pretrain/" + k: v for k, v in clip_metrics.items()}
     if wandb.run is not None:
         wandb.log(clip_metrics)
@@ -107,6 +125,7 @@ def main():
         eval_interval=eval_interval,
         device=device,
         model_name=model_name,
+        freeze_text=freeze_text,
         save_path=save_dir,
     )
 

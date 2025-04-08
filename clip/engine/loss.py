@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 
 def clip_loss(
-    image_features: torch.Tensor, text_features: torch.Tensor
+    image_features: torch.Tensor, text_features: torch.Tensor, freeze_text: bool = False,
 ) -> torch.Tensor:
     """
     Computes the contrastive loss for CLIP-style models.
@@ -27,5 +27,10 @@ def clip_loss(
     logits = image_features @ text_features.T
     labels = torch.arange(len(logits)).to(logits.device)
 
-    loss = (F.cross_entropy(logits, labels) + F.cross_entropy(logits.T, labels)) / 2
-    return loss
+    loss_images = F.cross_entropy(logits, labels)
+    if freeze_text:
+        return loss_images
+    else:
+        loss_text = F.cross_entropy(logits.T, labels)
+        loss = (loss_images + loss_text) / 2
+        return loss
