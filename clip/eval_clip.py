@@ -12,44 +12,62 @@ from utils import set_seed
 
 set_seed(0)
 
-if torch.cuda.is_available():
-    device = torch.device("cuda")
-elif torch.mps.is_available():
-    device = torch.device("mps")
-else:
-    device = torch.device("cpu")
+
+def define_device(suggested_device: str = "cpu"):
+    if suggested_device.startswith("cuda") and torch.cuda.is_available():
+        device = torch.device(suggested_device)
+    elif suggested_device == "mps" and torch.mps.is_available():
+        device = torch.device(suggested_device)
+    else:
+        device = torch.device("cpu")
+
+    return device
+
+
+def get_args():
+    parser = ArgumentParser()
+    parser.add_argument("--config", type=str, help="path to config file")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda",
+        help="device to run the experiment",
+    )
+    return parser.parse_args()
 
 
 def main():
+    args = get_args()
+    config = parse_config(args.config)
+    device = define_device(args.device)
+
+    exp_name = config.EXPERIMENT_NAME
+    model_name = config.MODEL.BACKBONE
     val_batch_size = 64
-    # exp_name = "clip-BIG-aug-cap-blur-no-small-lr-1e-6"
-    # exp_name = "clip-BIG-freeze-text-blur-no-small-lr-1e-6"
-    # exp_name = "clip-BIG-freeze-text-only-materials-blur-no-small-lr-1e-6"
-    # exp_name = "clip-BIG-only-materials-blur-no-small-lr-1e-6"
-    # exp_name = "clip-BIG-only-materials-blur-no-small-small-batch-lr-1e-6"
-    # exp_name = "clip-BIG-freeze-text-only-materials-blur-no-small-small-batch-lr-1e-6"
-    exp_name = "clip-BIG-freeze-text-only-materials-smart-blur-no-small-small-batch-lr-1e-6"
-    # exp_name = "clip-RN50x4-freeze-text-only-materials-smart-blur-no-small-small-batch-lr-1e-6"
-    model_name = "ViT-B/32"
+
     ckpt_metric = "mcs"  # mcs, mrr, recall_1, recall_5, recall_10
-    ckpt_path = f"{exp_name}/{model_name.replace('/', '_')}_best_{ckpt_metric}.pth"
-    add_materials_prefix = True
+    ckpt_path = f"training_results/{exp_name}/{model_name.replace('/', '_')}_best_{ckpt_metric}.pth"
+    add_materials_prefix = config.TRAIN.ADD_MATERIALS_PREFIX
 
     model, preprocess = clip.load(model_name, device=device)
     model = model.to(torch.float32)
 
     model.load_state_dict(torch.load(ckpt_path, weights_only=True))
 
-    val_images_path = "/home/docker_user/work/clip/data/val2017_cropped_blurred"
+    val_images_path = config.EVAL.IMAGES_PATH
 
     with open(
-        # "/home/docker_user/datasets/captions_augmented_val_no_small_final.json", "r"
-        "/home/docker_user/work/clip/data/captions_material_val_no_small_final.json",
+        config.EVAL.CAPTIONS_PATH,
         "r",
     ) as f:
         val_data = json.load(f)
 
-    eval_dataset = MaterialsDataset(val_images_path, val_data, add_materials_prefix=add_materials_prefix, preprocess=preprocess)
+    eval_dataset = MaterialsDataset(
+        val_images_path,
+        val_data,
+        add_materials_prefix=add_materials_prefix,
+        preprocess=preprocess,
+    )
     eval_loader = DataLoader(
         eval_dataset,
         batch_size=val_batch_size,

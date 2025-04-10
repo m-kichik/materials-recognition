@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 import json
 import logging
 import os
@@ -15,32 +16,46 @@ from utils import set_seed
 
 set_seed(0)
 
-if torch.cuda.is_available():
-    device = torch.device("cuda:1")
-elif torch.mps.is_available():
-    device = torch.device("mps")
-else:
-    device = torch.device("cpu")
+
+def define_device(suggested_device: str = "cpu"):
+    if suggested_device.startswith("cuda") and torch.cuda.is_available():
+        device = torch.device(suggested_device)
+    elif suggested_device == "mps" and torch.mps.is_available():
+        device = torch.device(suggested_device)
+    else:
+        device = torch.device("cpu")
+
+    return device
+
+
+def get_args():
+    parser = ArgumentParser()
+    parser.add_argument("--config", type=str, help="path to config file")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda",
+        help="device to run the experiment",
+    )
+    return parser.parse_args()
 
 
 def main():
-    train_batch_size = 32
-    val_batch_size = 32
-    exp_name = "clip-BIG-freeze-text-only-materials-blur-no-small-small-batch-lr-1e-6"
-    model_name = "ViT-B/32"
-    lr = 1e-6
-    # n_epochs = 20
-    # eval_interval = 1
-    # n_iters = 50000
-    n_iters = 200000
-    # eval_interval = 1000
-    eval_interval = 4000
-    # freeze_text = False
-    freeze_text = True
-    add_materials_prefix = False
-    add_materials_prefix = True
-    # log_wandb = False
-    log_wandb = True
+    args = get_args()
+    config = parse_config(args.config)
+    device = define_device(args.device)
+
+    train_batch_size = config.TRAIN.BATCH_SIZE
+    val_batch_size = config.EVAL.BATCH_SIZE
+    exp_name = config.EXPERIMENT_NAME
+    model_name = config.MODEL.BACKBONE
+
+    lr = config.TRAIN.LR
+    n_iters = config.TRAIN.ITERS
+    eval_interval = config.TRAIN.EVAL_INTERVAL
+    freeze_text = config.TRAIN.FREEZE_TEXT
+    add_materials_prefix = config.TRAIN.ADD_MATERIALS_PREFIX
+    log_wandb = config.TRAIN.WANDB
 
     if log_wandb:
         wandb_config = {
@@ -50,15 +65,15 @@ def main():
         }
 
         wandb.init(
-            project="MATERIALS",
+            project=config.PROJECT_NAME,
             name=exp_name,
             config=wandb_config,
         )
 
-    save_dir = exp_name
+    save_dir = f"training_results/{exp_name}"
 
     if not os.path.exists(save_dir):
-        os.mkdir(save_dir)
+        os.makedirs(save_dir, exists_ok=True)
 
     log_filename = f"{save_dir}/metrics.log"
     log_format = "%(asctime)s - %(levelname)s - %(message)s"
@@ -67,20 +82,33 @@ def main():
     model, preprocess = clip.load(model_name, device=device)
     model = model.to(torch.float32)
 
-    train_images_path = "/home/docker_user/datasets/train2017_cropped_blurred"
-    val_images_path = "/home/docker_user/datasets/val2017_cropped_blurred"
+    train_images_path = config.TRAIN.IMAGES_PATH
+    val_images_path = config.EVAL.IMAGES_PATH
 
-    # with open("train.json", "r") as f:
-    # with open("/home/docker_user/datasets/captions_augmented_train_no_small_final.json", "r") as f:
-    with open("/home/docker_user/datasets/captions_material_train_no_small_final.json", "r") as f:
+    with open(
+        config.TRAIN.CAPTIONS_PATH,
+        "r",
+    ) as f:
         train_data = json.load(f)
 
-    # with open("/home/docker_user/datasets/captions_augmented_val_no_small_final.json", "r") as f:
-    with open("/home/docker_user/datasets/captions_material_val_no_small_final.json", "r") as f:
+    with open(
+        config.EVAL.CAPTIONS_PATH,
+        "r",
+    ) as f:
         val_data = json.load(f)
 
-    train_dataset = MaterialsDataset(train_images_path, train_data, preprocess)
-    eval_dataset = MaterialsDataset(val_images_path, val_data, preprocess)
+    train_dataset = MaterialsDataset(
+        train_images_path,
+        train_data,
+        add_materials_prefix=add_materials_prefix,
+        preprocess=preprocess,
+    )
+    eval_dataset = MaterialsDataset(
+        val_images_path,
+        val_data,
+        add_materials_prefix=add_materials_prefix,
+        preprocess=preprocess,
+    )
 
     train_loader = DataLoader(
         train_dataset,

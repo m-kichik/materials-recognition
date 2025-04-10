@@ -1,0 +1,22 @@
+PROJECT_NAME: "MATERIALS"
+EXPERIMENT_NAME: "clip-BIG-only-materials-blur-no-small-small-batch-lr-1e-6"
+MODEL:
+  TYPE: "vanilla_clip"
+  BACKBONE: "ViT-B/32"
+TRAIN:
+  BATCH_SIZE: 32
+  NUM_WORKERS: 4
+  FREEZE_TEXT: False
+  ADD_MATERIALS_PREFIX: False
+  LR: 1e-6
+  ITERS: 50000
+  EVAL_INTERVAL: 1000
+  IMAGES_PATH: "/home/docker_user/datasets/train2017_cropped_blurred"
+  CAPTIONS_PATH: "/home/docker_user/datasets/captions_material_train_no_small_final.json"
+  OUT_DIR: "/home/docker_nano/nano-gpt/training_results/basic"
+  WANDB: True
+EVAL:
+  BATCH_SIZE: 32
+  NUM_WORKERS: 4
+  IMAGES_PATH: "/home/docker_user/datasets/val2017_cropped_blurred"
+  CAPTIONS_PATH: "/home/docker_user/datasets/captions_material_val_no_small_final.json"
