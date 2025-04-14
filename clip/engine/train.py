@@ -24,11 +24,6 @@ def get_cosine_with_warmup_scheduler(optimizer, num_warmup_steps, num_training_s
     def lr_lambda(current_step):
         if current_step < num_warmup_steps:
             # Linear warmup
-            print(
-                float(current_step),
-                float(max(1, num_warmup_steps)),
-                float(current_step) / float(max(1, num_warmup_steps)),
-            )
             return float(current_step) / float(max(1, num_warmup_steps))
         else:
             # Cosine decay

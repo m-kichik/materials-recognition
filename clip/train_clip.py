@@ -138,10 +138,10 @@ def main():
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, betas=(0.9, 0.98))
 
-    # clip_metrics, _ = evaluate(model, eval_loader, device=device)
-    # clip_metrics = {"pretrain/" + k: v for k, v in clip_metrics.items()}
-    # if wandb.run is not None:
-    #     wandb.log(clip_metrics)
+    clip_metrics, _ = evaluate(model, eval_loader, device=device)
+    clip_metrics = {"pretrain/" + k: v for k, v in clip_metrics.items()}
+    if wandb.run is not None:
+        wandb.log(clip_metrics)
 
     # train(
     #     model,
