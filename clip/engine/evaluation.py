@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 import clip
 
+
 @torch.inference_mode()
 def evaluate(
     model: torch.nn.Module,

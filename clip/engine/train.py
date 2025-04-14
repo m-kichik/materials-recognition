@@ -1,9 +1,11 @@
 """CLIP train"""
 
 import logging
+import math
 import random
 
 import torch
+from torch.optim.lr_scheduler import LambdaLR
 from tqdm import tqdm
 import wandb
 
@@ -12,6 +14,30 @@ import clip
 from .evaluation import evaluate
 from .loss import clip_loss
 from utils import save_ckpt
+
+
+def get_cosine_with_warmup_scheduler(optimizer, num_warmup_steps, num_training_steps):
+    """
+    Returns a LambdaLR scheduler with a linear warmup phase and a cosine annealing decay.
+    """
+
+    def lr_lambda(current_step):
+        if current_step < num_warmup_steps:
+            # Linear warmup
+            print(
+                float(current_step),
+                float(max(1, num_warmup_steps)),
+                float(current_step) / float(max(1, num_warmup_steps)),
+            )
+            return float(current_step) / float(max(1, num_warmup_steps))
+        else:
+            # Cosine decay
+            progress = float(current_step - num_warmup_steps) / float(
+                max(1, num_training_steps - num_warmup_steps)
+            )
+            return 0.5 * (1.0 + math.cos(math.pi * progress))
+
+    return LambdaLR(optimizer, lr_lambda)
 
 
 def train(
@@ -41,7 +67,7 @@ def train(
             text_tokens = clip.tokenize(captions).to(device)
 
             image_features = model.encode_image(images)
-            
+
             if freeze_text:
                 with torch.no_grad():
                     text_features = model.encode_text(text_tokens)
@@ -98,6 +124,8 @@ def train_iterations(
     train_loader: torch.utils.data.DataLoader,
     eval_loader: torch.utils.data.DataLoader,
     n_iterations: int = 10,
+    clip_lr: bool = False,
+    warmup_fraction: float = 0.1,
     eval_interval: int = 5,
     accumulation_steps: int = 1,
     device: str = "cpu",
@@ -113,10 +141,18 @@ def train_iterations(
         "mcs": 0.0,
     }
 
+    if clip_lr:
+        total_optimizer_steps = math.ceil(n_iterations / accumulation_steps)
+        num_warmup_steps = int(total_optimizer_steps * warmup_fraction)
+        scheduler = get_cosine_with_warmup_scheduler(
+            optimizer, num_warmup_steps, total_optimizer_steps
+        )
+
     # If shuffle=True in Dataloader initial args,
     # random permutations are applied in __iter__ of the loader.
     train_iter = iter(train_loader)
     optimizer.zero_grad()
+
     for iter_ in (pbar := tqdm(range(n_iterations))):
         model.train()
         try:
@@ -143,10 +179,14 @@ def train_iterations(
             if (iter_ + 1) % accumulation_steps == 0:
                 optimizer.step()
                 optimizer.zero_grad()
+                if clip_lr:
+                    scheduler.step()
 
             # loss = loss.item()
             loss_val = loss.item() * accumulation_steps
-            pbar.set_description(f"loss: {loss_val}")
+            pbar.set_description(
+                f"loss: {loss_val:.6f}, lr: {scheduler.get_last_lr()[0]:.6e}"
+            )
 
             if wandb.run is not None:
                 wandb.log({"train/loss": loss_val})

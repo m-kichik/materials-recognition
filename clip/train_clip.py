@@ -53,6 +53,8 @@ def main():
     pretrained = config.TRAIN.PRETRAINED
 
     lr = config.TRAIN.LR
+    clip_lr = config.TRAIN.CLIP_LR
+    warmup_fraction = config.TRAIN.WARMUP
     accumulation_steps = config.TRAIN.GRADIENT_ACCUMULATION_STEPS
     n_iters = config.TRAIN.ITERS
     eval_interval = config.TRAIN.EVAL_INTERVAL
@@ -65,6 +67,8 @@ def main():
             "lr": lr,
             "train_batch_size": train_batch_size,
             "val_batch_size": val_batch_size,
+            "clip_lr": clip_lr,
+            "warmup_fraction": warmup_fraction,
             "accumulation_steps": accumulation_steps,
             "freeze_text": freeze_text,
             "add_materials_prefix": add_materials_prefix
@@ -134,10 +138,10 @@ def main():
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, betas=(0.9, 0.98))
 
-    clip_metrics, _ = evaluate(model, eval_loader, device=device)
-    clip_metrics = {"pretrain/" + k: v for k, v in clip_metrics.items()}
-    if wandb.run is not None:
-        wandb.log(clip_metrics)
+    # clip_metrics, _ = evaluate(model, eval_loader, device=device)
+    # clip_metrics = {"pretrain/" + k: v for k, v in clip_metrics.items()}
+    # if wandb.run is not None:
+    #     wandb.log(clip_metrics)
 
     # train(
     #     model,
@@ -157,6 +161,8 @@ def main():
         train_loader,
         eval_loader,
         n_iterations=n_iters,
+        clip_lr=clip_lr,
+        warmup_fraction=warmup_fraction,
         eval_interval=eval_interval,
         accumulation_steps=accumulation_steps,
         device=device,

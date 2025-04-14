@@ -5,7 +5,9 @@ import torch.nn.functional as F
 
 
 def clip_loss(
-    image_features: torch.Tensor, text_features: torch.Tensor, freeze_text: bool = False,
+    image_features: torch.Tensor,
+    text_features: torch.Tensor,
+    freeze_text: bool = False,
 ) -> torch.Tensor:
     """
     Computes the contrastive loss for CLIP-style models.
