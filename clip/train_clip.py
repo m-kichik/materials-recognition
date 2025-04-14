@@ -3,7 +3,7 @@ import json
 import logging
 import os
 
-import clip
+# import clip
 
 import torch
 from torch.utils.data import DataLoader
@@ -12,7 +12,7 @@ import wandb
 
 from datasets.materials_dataset import MaterialsDataset
 from engine import train, train_iterations, evaluate
-from utils import set_seed
+from utils import build_clip, set_seed, parse_config
 
 set_seed(0)
 
@@ -50,7 +50,10 @@ def main():
     exp_name = config.EXPERIMENT_NAME
     model_name = config.MODEL.BACKBONE
 
+    pretrained = config.TRAIN.PRETRAINED
+
     lr = config.TRAIN.LR
+    accumulation_steps = config.TRAIN.GRADIENT_ACCUMULATION_STEPS
     n_iters = config.TRAIN.ITERS
     eval_interval = config.TRAIN.EVAL_INTERVAL
     freeze_text = config.TRAIN.FREEZE_TEXT
@@ -62,6 +65,9 @@ def main():
             "lr": lr,
             "train_batch_size": train_batch_size,
             "val_batch_size": val_batch_size,
+            "accumulation_steps": accumulation_steps,
+            "freeze_text": freeze_text,
+            "add_materials_prefix": add_materials_prefix
         }
 
         wandb.init(
@@ -73,14 +79,15 @@ def main():
     save_dir = f"training_results/{exp_name}"
 
     if not os.path.exists(save_dir):
-        os.makedirs(save_dir, exists_ok=True)
+        os.makedirs(save_dir, exist_ok=True)
 
     log_filename = f"{save_dir}/metrics.log"
     log_format = "%(asctime)s - %(levelname)s - %(message)s"
     logging.basicConfig(filename=log_filename, level=logging.INFO, format=log_format)
 
-    model, preprocess = clip.load(model_name, device=device)
-    model = model.to(torch.float32)
+    # model, preprocess = clip.load(model_name, device=device)
+    # model = model.to(torch.float32)
+    model, preprocess = build_clip(model_name, pretrained=pretrained, device=device)
 
     train_images_path = config.TRAIN.IMAGES_PATH
     val_images_path = config.EVAL.IMAGES_PATH
@@ -151,6 +158,7 @@ def main():
         eval_loader,
         n_iterations=n_iters,
         eval_interval=eval_interval,
+        accumulation_steps=accumulation_steps,
         device=device,
         model_name=model_name,
         freeze_text=freeze_text,

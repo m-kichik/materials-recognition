@@ -99,6 +99,7 @@ def train_iterations(
     eval_loader: torch.utils.data.DataLoader,
     n_iterations: int = 10,
     eval_interval: int = 5,
+    accumulation_steps: int = 1,
     device: str = "cpu",
     model_name: str = "",
     freeze_text: bool = False,
@@ -115,6 +116,7 @@ def train_iterations(
     # If shuffle=True in Dataloader initial args,
     # random permutations are applied in __iter__ of the loader.
     train_iter = iter(train_loader)
+    optimizer.zero_grad()
     for iter_ in (pbar := tqdm(range(n_iterations))):
         model.train()
         try:
@@ -132,16 +134,22 @@ def train_iterations(
                 text_features = model.encode_text(text_tokens)
 
             loss = clip_loss(image_features, text_features, freeze_text=freeze_text)
+            loss = loss / accumulation_steps
 
-            optimizer.zero_grad()
+            # optimizer.zero_grad()
             loss.backward()
-            optimizer.step()
+            # optimizer.step()
 
-            loss = loss.item()
-            pbar.set_description(f"loss: {loss}")
+            if (iter_ + 1) % accumulation_steps == 0:
+                optimizer.step()
+                optimizer.zero_grad()
+
+            # loss = loss.item()
+            loss_val = loss.item() * accumulation_steps
+            pbar.set_description(f"loss: {loss_val}")
 
             if wandb.run is not None:
-                wandb.log({"train/loss": loss})
+                wandb.log({"train/loss": loss_val})
 
         except StopIteration:
             train_iter = iter(train_loader)
@@ -175,3 +183,7 @@ def train_iterations(
             if wandb.run is not None:
                 eval_metrics = {"eval/" + k: v for k, v in eval_metrics.items()}
                 wandb.log(eval_metrics)
+
+    if (n_iterations % accumulation_steps) != 0:
+        optimizer.step()
+        optimizer.zero_grad()
