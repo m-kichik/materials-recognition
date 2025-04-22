@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 import json
 import time
 
@@ -8,7 +9,7 @@ from torch.utils.data import DataLoader
 
 from datasets.materials_dataset import MaterialsDataset
 from engine import evaluate
-from utils import set_seed
+from utils import set_seed, parse_config
 
 set_seed(0)
 
@@ -42,10 +43,10 @@ def main():
     device = define_device(args.device)
 
     exp_name = config.EXPERIMENT_NAME
-    model_name = config.MODEL.BACKBONE
+    model_name = config.MODEL.CLIP_BACKBONE
     val_batch_size = 64
 
-    ckpt_metric = "mcs"  # mcs, mrr, recall_1, recall_5, recall_10
+    ckpt_metric = "mrr"  # mcs, mrr, recall_1, recall_5, recall_10
     ckpt_path = f"training_results/{exp_name}/{model_name.replace('/', '_')}_best_{ckpt_metric}.pth"
     add_materials_prefix = config.TRAIN.ADD_MATERIALS_PREFIX
 

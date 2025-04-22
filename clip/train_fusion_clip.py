@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 import wandb
 
 from datasets.materials_dataset import MaterialsDataset
-from engine import train_iterations, evaluate
+from engine import train_fusion_iterations
 from utils import build_experiment, set_seed, parse_config
 
 set_seed(0)
@@ -43,8 +43,6 @@ def main():
     config = parse_config(args.config)
     device = define_device(args.device)
 
-    train_batch_size = config.TRAIN.BATCH_SIZE
-    val_batch_size = config.EVAL.BATCH_SIZE
     exp_name = config.EXPERIMENT_NAME
     model_name = config.MODEL.CLIP_BACKBONE
 
@@ -60,8 +58,8 @@ def main():
     if log_wandb:
         wandb_config = {
             "lr": config.TRAIN.LR,
-            "train_batch_size": train_batch_size,
-            "val_batch_size": val_batch_size,
+            "train_batch_size": config.TRAIN.BATCH_SIZE,
+            "val_batch_size": config.EVAL.BATCH_SIZE,
             "shedule_lr": shedule_lr,
             "warmup_fraction": warmup_fraction,
             "accumulation_steps": accumulation_steps,
@@ -86,55 +84,37 @@ def main():
 
     model, preprocess, loss, optimizer = build_experiment(config, device=device)
 
-    train_images_path = config.TRAIN.IMAGES_PATH
-    val_images_path = config.EVAL.IMAGES_PATH
-
-    with open(
-        config.TRAIN.CAPTIONS_PATH,
-        "r",
-    ) as f:
-        train_data = json.load(f)
-
-    with open(
-        config.EVAL.CAPTIONS_PATH,
-        "r",
-    ) as f:
-        val_data = json.load(f)
-
     train_dataset = MaterialsDataset(
-        train_images_path,
-        train_data,
+        config.TRAIN.IMAGES_PATH,
+        config.TRAIN.CAPTIONS_PATH,
+        config.TRAIN.EMBEDDINGS_PATH,
         add_materials_prefix=add_materials_prefix,
-        preprocess=preprocess,
+        preprocess=preprocess
     )
     eval_dataset = MaterialsDataset(
-        val_images_path,
-        val_data,
+        config.EVAL.IMAGES_PATH,
+        config.EVAL.CAPTIONS_PATH,
+        config.EVAL.EMBEDDINGS_PATH,
         add_materials_prefix=add_materials_prefix,
-        preprocess=preprocess,
+        preprocess=preprocess
     )
 
     train_loader = DataLoader(
         train_dataset,
-        batch_size=train_batch_size,
+        batch_size=config.TRAIN.BATCH_SIZE,
         shuffle=True,
         num_workers=4,
         drop_last=True,
     )
     eval_loader = DataLoader(
         eval_dataset,
-        batch_size=val_batch_size,
+        batch_size=config.EVAL.BATCH_SIZE,
         shuffle=True,
         num_workers=4,
         drop_last=True,
     )
 
-    clip_metrics, _ = evaluate(model, eval_loader, device=device)
-    clip_metrics = {"pretrain/" + k: v for k, v in clip_metrics.items()}
-    if wandb.run is not None:
-        wandb.log(clip_metrics)
-
-    train_iterations(
+    train_fusion_iterations(
         model,
         loss,
         optimizer,
