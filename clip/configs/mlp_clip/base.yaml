@@ -1,0 +1,37 @@
+PROJECT_NAME: "MATERIALS"
+EXPERIMENT_NAME: "mlp-clip-only-materials"
+MODEL:
+  TYPE: "mlp_clip"
+  CLIP_BACKBONE: "openai/clip-vit-base-patch32"
+TRAIN:
+  PRETRAINED: True
+  BATCH_SIZE: 32
+  NUM_WORKERS: 4
+  FREEZE_TEXT: False
+  ADD_MATERIALS_PREFIX: False
+  CLIP_LR: True
+  WARMUP: 0.1
+  GRADIENT_ACCUMULATION_STEPS: 1
+  LR: 5e-6
+  CRITERION: "ReCLIP"
+  LAMBDA_CE: 0.1
+  MLP_LR: 1e-4
+  TEMPERATURE: 0.07
+  TEMP_LR: 1e-4
+  ITERS: 200000
+  EVAL_INTERVAL: 4000
+  # IMAGES_PATH: "/home/docker_user/work/clip/data/train2017_cropped_blurred_pad_small"
+  # CAPTIONS_PATH: "/home/docker_user/work/clip/data/captions_material_train_final.json"
+  IMAGES_PATH: "/Users/rito4ka/dev/diploma/data/val2017_cropped_blurred_pad_small"
+  CAPTIONS_PATH: "/Users/rito4ka/dev/diploma/data/captions_material_val_final.json"
+  MATERIALS_PATH: "/Users/rito4ka/dev/diploma/data/materials_weights_train.json"
+  OUT_DIR: "/home/docker_nano/nano-gpt/training_results/basic"
+  WANDB: False
+EVAL:
+  BATCH_SIZE: 32
+  NUM_WORKERS: 4
+  # IMAGES_PATH: "/home/docker_user/work/clip/data/val2017_cropped_blurred_pad_small"
+  # CAPTIONS_PATH: "/home/docker_user/work/clip/data/captions_material_val_final.json"
+  IMAGES_PATH: "/Users/rito4ka/dev/diploma/data/val2017_cropped_blurred_pad_small"
+  CAPTIONS_PATH: "/Users/rito4ka/dev/diploma/data/captions_material_val_final.json"
+  

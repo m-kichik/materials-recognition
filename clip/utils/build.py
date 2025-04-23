@@ -1,7 +1,9 @@
+import json
+
 import torch
 
-from engine.criterion import vanilla_clip_loss, CLIPLoss, SigLIPLoss
-from modelling import CLIP, LFCLIP
+from engine.criterion import vanilla_clip_loss, CLIPLoss, ReCLIPLoss, SigLIPLoss
+from modelling import CLIP, LFCLIP, MLPCLIP
 
 
 def build_experiment(
@@ -31,6 +33,18 @@ def build_experiment(
             clip_ckpt=config.MODEL.CLIP_CKPT,
             num_heads=config.MODEL.FUSION_HEADS,
             mode="train",
+            device=device,
+        )
+
+        preprocess = model.preprocess
+
+    elif model_type == "mlp_clip":
+        with open(config.TRAIN.MATERIALS_PATH, "r") as file:
+            materials = json.load(file)
+
+        model = MLPCLIP(
+            clip_model_name=clip_model_name,
+            num_classes=len(materials["names"]),
             device=device,
         )
 
@@ -87,6 +101,25 @@ def build_experiment(
                 weight_decay=0.1,
                 betas=(0.9, 0.98),
             )
+    elif loss_type == "ReCLIP":
+        with open(config.TRAIN.MATERIALS_PATH, "r") as file:
+            materials = json.load(file)
+            class_weights = torch.tensor(materials["weights"]).to(device)
+        lambda_ce = config.TRAIN.LAMBDA_CE
+        t = config.TRAIN.TEMPERATURE
+        criterion = ReCLIPLoss(class_weights, lambda_ce, t, log_wandb=config.TRAIN.WANDB)
+
+        optimizer = torch.optim.AdamW(
+            [
+                {"params": model.clip.parameters()},
+                {"params": model.mlp.parameters(), "lr": config.TRAIN.MLP_LR},
+                {"params": criterion.logit_scale, "lr": config.TRAIN.TEMP_LR},
+            ],
+            lr=config.TRAIN.LR,
+            weight_decay=0.1,
+            betas=(0.9, 0.98),
+        )
+
     elif loss_type == "SigLIP":
         t = config.TRAIN.TEMPERATURE
         b = config.TRAIN.BIAS

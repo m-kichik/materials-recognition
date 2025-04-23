@@ -26,6 +26,7 @@ class MaterialsDataset(Dataset):
         self,
         image_dir: str,
         captions: Union[str, List[Dict[str, str]]],
+        materials_path: str = None,
         embeddings_dir: str = None,
         add_materials_prefix: bool = False,
         preprocess: Callable = None,
@@ -58,6 +59,14 @@ class MaterialsDataset(Dataset):
             raise ValueError(
                 "Captions should be path to json file or list with captions."
             )
+        
+        if materials_path is not None:
+            with open(materials_path, "r") as f:
+                materials = json.load(f)
+            self.materials = materials["names"]
+            self.materials_dict = {name: i for i, name in enumerate(self.materials)}
+        else:
+            self.materials = None
 
         if embeddings_dir is not None:
             self.load_embeddings = True
@@ -85,14 +94,22 @@ class MaterialsDataset(Dataset):
             Tuple[any, str]: A tuple (image, caption) where image is the processed image tensor,
                              and caption is the corresponding text description.
         """
+        ret_vals = []
+
         image_path = f"{self.image_dir}/{self.data[idx]['image']}"
         image = Image.open(image_path)
         if self.preprocess is not None:
             image = self.preprocess(image)
+        ret_vals.append(image)
 
         caption = self.data[idx]["caption"].lower().strip()
         if self.add_materials_prefix:
             caption = "an object made of " + caption
+        ret_vals.append(caption)
+
+        if self.materials is not None:
+            mat_idx = self.materials_dict.get(caption)
+            ret_vals.append(mat_idx)
 
         if self.load_embeddings:
             embedding_path = f"{self.embeddings_dir}/{self.data[idx]['image'][:-4].split('_')[0]}.pkl"
@@ -102,6 +119,6 @@ class MaterialsDataset(Dataset):
             if embedding.shape[0] == 1:  # we are responsible for the mistakes we made
                 embedding = torch.squeeze(embedding)
 
-            return image, caption, embedding
+            ret_vals.append(embedding)
 
-        return image, caption
+        return tuple(ret_vals)
