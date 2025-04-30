@@ -1,11 +1,77 @@
 from typing import List
 
-import PIL
-
 import torch
+import torch.nn.functional as F
 import torch.nn as nn
 
 from transformers import CLIPProcessor, CLIPModel
+
+
+class ConcatFusion(nn.Module):
+    def __init__(
+            self,
+            out_size: int = 512,
+            device: str = "cpu",
+    ):
+        super().__init__()
+
+        self.device = device
+
+        self.context_proj = nn.LazyLinear(out_features=out_size).to(device)
+
+        self.mlp = nn.Sequential(
+            nn.LazyLinear(out_features=out_size * 2),
+            nn.Dropout(0.1),
+            nn.ReLU(),
+            nn.Linear(out_size * 2, out_size),
+        )
+        self.mlp.to(device)
+
+    def forward(self, clip_features: torch.tensor, context_embeddings: torch.tensor):
+        context_features = self.context_proj(context_embeddings.to(self.device))
+
+        fused_embeddings = self.mlp(torch.cat([clip_features, context_features], dim=-1))
+
+        return fused_embeddings
+
+
+class MHAFusion(nn.Module):
+    def __init__(
+        self,
+        out_size: int = 512,
+        num_heads: int = 8,
+        device: str = "cpu",
+    ):
+        super().__init__()
+        self.device = device
+
+        self.context_proj = nn.LazyLinear(out_features=out_size).to(device)
+        self.clip_proj = nn.Linear(out_size, out_size).to(device)
+
+        self.fusion_attn = nn.MultiheadAttention(
+            embed_dim=out_size,
+            num_heads=num_heads,
+            batch_first=True,
+            dropout=0.1,
+        ).to(device)
+
+        self.output_proj = nn.Linear(out_size, out_size).to(device)
+
+    def forward(self, clip_features: torch.Tensor, context_embeddings: torch.Tensor):
+        clip_features = self.clip_proj(clip_features.to(self.device))
+        context_features = self.context_proj(context_embeddings.to(self.device))
+
+        attn_output, attn_weights = self.fusion_attn(
+            clip_features,
+            context_features,
+            context_features
+        )
+
+        fused = attn_output.squeeze(1)
+
+        fused_embeddings = self.output_proj(fused)
+
+        return fused_embeddings
 
 
 class LFCLIP(nn.Module):
@@ -14,6 +80,7 @@ class LFCLIP(nn.Module):
         clip_model_name: str = "openai/clip-vit-base-patch32",
         freeze_clip:bool = False,
         clip_ckpt:str = "",
+        fusion_type: str = "concat",
         num_heads: int = 8,
         mode: str = "train",
         device: str = "cpu",
@@ -28,29 +95,18 @@ class LFCLIP(nn.Module):
         self.processor = CLIPProcessor.from_pretrained(clip_model_name)
         self.hidden_size = self.clip.config.vision_config.hidden_size
 
+        self.fusion_type = fusion_type
+
         self.mode = mode
         if mode == "inference":
             raise NotImplementedError("Ping author to implement fair pipeline.")
-
-        self.context_proj = nn.LazyLinear(out_features=self.hidden_size).to(device)
-
-        self.fusion_attn = nn.MultiheadAttention(
-            embed_dim=self.hidden_size, num_heads=num_heads, batch_first=True
-        ).to(device)
-
-        self.fusion_token = nn.Parameter(
-            self.clip.text_model.embeddings.token_embedding.weight[-1].clone()
-        ).to(device)
-
-        if self.clip.text_model.config.hidden_size != self.hidden_size:
-            self.fusion_token_proj = nn.Linear(
-                self.clip.text_model.config.hidden_size,
-                self.hidden_size
-            ).to(device)
+        
+        if fusion_type == "concat":
+            self.fusion = ConcatFusion(out_size=512, device=device)
+        elif fusion_type == "mha":
+            self.fusion = MHAFusion(out_size=512, num_heads=num_heads, device=device)
         else:
-            self.fusion_token_proj = nn.Identity().to(device)
-
-        self.proj = nn.Linear(self.hidden_size, 512).to(device)
+            raise NotImplementedError(f"Fusion type {fusion_type} is not implemented.")
 
     def preprocess(self, images):
         images = self.processor(images=[images], return_tensors="pt", padding=True)
@@ -61,25 +117,13 @@ class LFCLIP(nn.Module):
     ):
         if self.freeze_clip:
             with torch.no_grad():
-                vision_outputs = self.clip.vision_model(pixel_values=images)
+                clip_features = self.clip.get_image_features(pixel_values=images)
         else:
-            vision_outputs = self.clip.vision_model(pixel_values=images)
-        clip_features = vision_outputs.last_hidden_state
+            clip_features = self.clip.get_image_features(pixel_values=images)
 
-        context_features = self.context_proj(context_embeddings.to(self.device))
-        context_features = context_features.unsqueeze(1)
+        clip_features = F.normalize(clip_features, dim=-1)
 
-        batch_size = clip_features.size(0)
-        fusion_tokens = self.fusion_token_proj(self.fusion_token)  # [1, 768]
-        fusion_tokens = fusion_tokens.repeat(batch_size, 1, 1)
-        clip_features = torch.cat([fusion_tokens, clip_features[:, 1:, :]], dim=1)
-
-        fused_features, _ = self.fusion_attn(
-            query=clip_features, key=context_features, value=context_features
-        )
-
-        fused_embeddings = fused_features[:, 0, :]
-        fused_embeddings = self.proj(fused_embeddings)
+        fused_embeddings = self.fusion(clip_features, context_embeddings)
 
         return fused_embeddings
 

@@ -285,6 +285,7 @@ def train_reclip_iterations(
                 text_features = model.encode_text(captions)
 
             cls_pred = model.classify(image_features)
+            cls_gt = cls_gt.to(device)
 
             loss, loss_i, loss_t, loss_ce = criterion(
                 image_features, text_features, cls_pred, cls_gt, freeze_text=freeze_text

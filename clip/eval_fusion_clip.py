@@ -1,13 +1,12 @@
 from argparse import ArgumentParser
 import json
 
-import clip
-
 import torch
 from torch.utils.data import DataLoader
 
 from datasets.materials_dataset import MaterialsDataset
-from engine import evaluate
+from engine import evaluate_fusion_lazy
+from modelling import LFCLIP
 from utils import set_seed, parse_config
 
 set_seed(0)
@@ -49,25 +48,25 @@ def main():
     ckpt_path = f"training_results/{exp_name}/{model_name.replace('/', '_')}_best_{ckpt_metric}.pth"
     add_materials_prefix = config.TRAIN.ADD_MATERIALS_PREFIX
 
-    model, preprocess = clip.load(model_name, device=device)
-    model = model.to(torch.float32)
+    model = LFCLIP(
+            clip_model_name=model_name,
+            num_heads=config.MODEL.FUSION_HEADS,
+            mode="train",
+            device=device,
+        )
+
+    preprocess = model.preprocess
 
     model.load_state_dict(torch.load(ckpt_path, weights_only=True))
 
-    val_images_path = config.EVAL.IMAGES_PATH
-
-    with open(
-        config.EVAL.CAPTIONS_PATH,
-        "r",
-    ) as f:
-        val_data = json.load(f)
-
     eval_dataset = MaterialsDataset(
-        val_images_path,
-        val_data,
+        images_dir=config.EVAL.IMAGES_PATH,
+        captions=config.EVAL.CAPTION_PATH,
+        embeddings_dir=config.EVAL.EMBEDDINGS_PATH,
         add_materials_prefix=add_materials_prefix,
-        preprocess=preprocess,
+        preprocess=preprocess
     )
+
     eval_loader = DataLoader(
         eval_dataset,
         batch_size=val_batch_size,
@@ -77,7 +76,7 @@ def main():
     )
 
     print(f"Evaluate {exp_name} with {ckpt_metric} checkpoint selection.")
-    eval_metrics, mean_batch_time = evaluate(model, eval_loader, device=device)
+    eval_metrics, mean_batch_time = evaluate_fusion_lazy(model, eval_loader, device=device)
     for mname, mvalue in eval_metrics.items():
         print(f"{mname}:\t{mvalue}")
 

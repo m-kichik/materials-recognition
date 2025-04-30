@@ -91,13 +91,15 @@ def main():
     train_dataset = MaterialsDataset(
         config.TRAIN.IMAGES_PATH,
         config.TRAIN.CAPTIONS_PATH,
-        config.TRAIN.MATERIALS_PATH,
+        materials_path=config.TRAIN.MATERIALS_PATH,
+        captions_key=config.TRAIN.CAPTIONS_KEY,
         add_materials_prefix=add_materials_prefix,
         preprocess=preprocess,
     )
     eval_dataset = MaterialsDataset(
         config.EVAL.IMAGES_PATH,
         config.EVAL.CAPTIONS_PATH,
+        captions_key=config.EVAL.CAPTIONS_KEY,
         add_materials_prefix=add_materials_prefix,
         preprocess=preprocess,
     )
@@ -117,10 +119,10 @@ def main():
         drop_last=True,
     )
 
-    # clip_metrics, _ = evaluate(model, eval_loader, device=device)
-    # clip_metrics = {"pretrain/" + k: v for k, v in clip_metrics.items()}
-    # if wandb.run is not None:
-    #     wandb.log(clip_metrics)
+    clip_metrics, _ = evaluate(model, eval_loader, device=device)
+    clip_metrics = {"pretrain/" + k: v for k, v in clip_metrics.items()}
+    if wandb.run is not None:
+        wandb.log(clip_metrics)
 
     train_reclip_iterations(
         model,

@@ -18,26 +18,21 @@ def build_experiment(
             model = CLIP(clip_model_name, device=device)
             preprocess = model.preprocess
         else:
-            import open_clip
-
-            model, _, preprocess = open_clip.create_model_and_transforms(
-                clip_model_name, device=device, pretrained=None
-            )
-
-        model = model.to(torch.float32)
-
+            raise NotImplementedError(
+                "Zero CLIP model is not available. Please set `PRETRAINED` to True."
+                )
     elif model_type == "late_fusion_clip":
         model = LFCLIP(
             clip_model_name=clip_model_name,
             freeze_clip=config.MODEL.FREEZE_CLIP,
             clip_ckpt=config.MODEL.CLIP_CKPT,
+            fusion_type=config.MODEL.FUSION_TYPE,
             num_heads=config.MODEL.FUSION_HEADS,
             mode="train",
             device=device,
         )
 
         preprocess = model.preprocess
-
     elif model_type == "mlp_clip":
         with open(config.TRAIN.MATERIALS_PATH, "r") as file:
             materials = json.load(file)
@@ -80,11 +75,7 @@ def build_experiment(
                 optimizer = torch.optim.AdamW(
                     [
                         {"params": model.clip.parameters()},
-                        {"params": model.context_proj.parameters(), "lr": config.TRAIN.FUSION_LR},
-                        {"params": model.fusion_attn.parameters(), "lr": config.TRAIN.FUSION_LR},
-                        {"params": model.fusion_token, "lr": config.TRAIN.FUSION_LR},
-                        {"params": model.fusion_token_proj.parameters(), "lr": config.TRAIN.FUSION_LR},
-                        {"params": model.proj.parameters(), "lr": config.TRAIN.FUSION_LR},
+                        {"params": model.fusion.parameters(), "lr": config.TRAIN.FUSION_LR},
                         {"params": criterion.logit_scale, "lr": config.TRAIN.TEMP_LR},
                     ],
                     lr=config.TRAIN.LR,
@@ -102,9 +93,11 @@ def build_experiment(
                 betas=(0.9, 0.98),
             )
     elif loss_type == "ReCLIP":
-        with open(config.TRAIN.MATERIALS_PATH, "r") as file:
-            materials = json.load(file)
-            class_weights = torch.tensor(materials["weights"]).to(device)
+        class_weights = None
+        if config.TRAIN.WEIGHT_CE:
+            with open(config.TRAIN.MATERIALS_PATH, "r") as file:
+                materials = json.load(file)
+                class_weights = torch.tensor(materials["weights"]).to(device)
         lambda_ce = config.TRAIN.LAMBDA_CE
         t = config.TRAIN.TEMPERATURE
         criterion = ReCLIPLoss(class_weights, lambda_ce, t, log_wandb=config.TRAIN.WANDB)
@@ -119,7 +112,6 @@ def build_experiment(
             weight_decay=0.1,
             betas=(0.9, 0.98),
         )
-
     elif loss_type == "SigLIP":
         t = config.TRAIN.TEMPERATURE
         b = config.TRAIN.BIAS

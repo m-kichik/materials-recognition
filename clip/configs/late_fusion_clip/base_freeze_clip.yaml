@@ -1,0 +1,35 @@
+PROJECT_NAME: "MATERIALS"
+EXPERIMENT_NAME: "late-fusion-clip-only-materials-freeze-clip-new-t-dummy-norm"
+MODEL:
+  TYPE: "late_fusion_clip"
+  CLIP_BACKBONE: "openai/clip-vit-base-patch32"
+  FUSION_HEADS: 8
+  FREEZE_CLIP: True
+  CLIP_CKPT: "/home/docker_user/work/clip/training_results/clip-BIG-only-materials-blur-padding-clipping-small-batch-lr-5e-6-tune-t/openai_clip-vit-base-patch32_best_mrr.pth"
+TRAIN:
+  PRETRAINED: True
+  BATCH_SIZE: 32
+  NUM_WORKERS: 4
+  FREEZE_TEXT: False
+  ADD_MATERIALS_PREFIX: False
+  CLIP_LR: True
+  WARMUP: 0.1
+  GRADIENT_ACCUMULATION_STEPS: 1
+  LR: 5e-6
+  FUSION_LR: 1e-4
+  CRITERION: "CLIP"
+  TEMPERATURE: 0.07
+  TEMP_LR: 1e-4
+  ITERS: 200000
+  EVAL_INTERVAL: 4000
+  IMAGES_PATH: "/home/docker_user/work/clip/data/train2017_cropped_blurred_pad_small"
+  CAPTIONS_PATH: "/home/docker_user/work/clip/data/captions_material_train_final.json"
+  EMBEDDINGS_PATH: "/home/docker_user/datasets/LVIS/radio_v2.5-b/train2017"
+  OUT_DIR: "/home/docker_nano/nano-gpt/training_results/basic"
+  WANDB: True
+EVAL:
+  BATCH_SIZE: 32
+  NUM_WORKERS: 4
+  IMAGES_PATH: "/home/docker_user/work/clip/data/val2017_cropped_blurred_pad_small"
+  CAPTIONS_PATH: "/home/docker_user/work/clip/data/captions_material_val_final.json"
+  EMBEDDINGS_PATH: "/home/docker_user/datasets/LVIS/radio_v2.5-b/val2017"

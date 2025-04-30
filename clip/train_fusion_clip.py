@@ -87,14 +87,16 @@ def main():
     train_dataset = MaterialsDataset(
         config.TRAIN.IMAGES_PATH,
         config.TRAIN.CAPTIONS_PATH,
-        config.TRAIN.EMBEDDINGS_PATH,
+        captions_key=config.TRAIN.CAPTION_KEY,
+        embeddings_dir=config.TRAIN.EMBEDDINGS_PATH,
         add_materials_prefix=add_materials_prefix,
         preprocess=preprocess
     )
     eval_dataset = MaterialsDataset(
         config.EVAL.IMAGES_PATH,
         config.EVAL.CAPTIONS_PATH,
-        config.EVAL.EMBEDDINGS_PATH,
+        captions_key=config.EVAL.CAPTION_KEY,
+        embeddings_dir=config.EVAL.EMBEDDINGS_PATH,
         add_materials_prefix=add_materials_prefix,
         preprocess=preprocess
     )

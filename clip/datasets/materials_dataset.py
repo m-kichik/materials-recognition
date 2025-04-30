@@ -24,8 +24,9 @@ class MaterialsDataset(Dataset):
 
     def __init__(
         self,
-        image_dir: str,
+        images_dir: str,
         captions: Union[str, List[Dict[str, str]]],
+        captions_key: str = "augmented_caption",
         materials_path: str = None,
         embeddings_dir: str = None,
         add_materials_prefix: bool = False,
@@ -46,7 +47,7 @@ class MaterialsDataset(Dataset):
         Raises:
             ValueError: If captions is not a string (JSON file path) or a list.
         """
-        self.image_dir = image_dir
+        self.image_dir = images_dir
         self.add_materials_prefix = add_materials_prefix
         self.preprocess = preprocess
 
@@ -59,6 +60,7 @@ class MaterialsDataset(Dataset):
             raise ValueError(
                 "Captions should be path to json file or list with captions."
             )
+        self.captions_key = captions_key
         
         if materials_path is not None:
             with open(materials_path, "r") as f:
@@ -102,13 +104,13 @@ class MaterialsDataset(Dataset):
             image = self.preprocess(image)
         ret_vals.append(image)
 
-        caption = self.data[idx]["caption"].lower().strip()
+        caption = self.data[idx][self.captions_key].lower().strip()[:120]
         if self.add_materials_prefix:
             caption = "an object made of " + caption
         ret_vals.append(caption)
 
         if self.materials is not None:
-            mat_idx = self.materials_dict.get(caption)
+            mat_idx = self.materials_dict.get(self.data[idx]["material"])
             ret_vals.append(mat_idx)
 
         if self.load_embeddings:

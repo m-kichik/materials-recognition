@@ -20,6 +20,10 @@ class Config:
     def parse_config(self, config: dict):
         self.__dict__.update(config)
 
+    def __getattr__(self, name):
+        """Return None for missing attributes to prevent AttributeError."""
+        return None
+
 
 def parse_config(config_path):
     with open(config_path, "r") as file:
