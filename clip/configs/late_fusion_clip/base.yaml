@@ -1,12 +1,12 @@
 PROJECT_NAME: "MATERIALS"
-EXPERIMENT_NAME: "late-fusion-clip-only-materials"
+EXPERIMENT_NAME: "late-fusion-clip-only-materials-mha-2h"
 MODEL:
   TYPE: "late_fusion_clip"
   CLIP_BACKBONE: "openai/clip-vit-base-patch32"
   FREEZE_CLIP: False
   CLIP_CKPT:
   FUSION_TYPE: "mha"
-  FUSION_HEADS: 8
+  FUSION_HEADS: 2
 TRAIN:
   PRETRAINED: True
   BATCH_SIZE: 32

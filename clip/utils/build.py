@@ -60,11 +60,7 @@ def build_experiment(
             if config.MODEL.FREEZE_CLIP:
                     optimizer = torch.optim.AdamW(
                     [
-                        {"params": model.context_proj.parameters(), "lr": config.TRAIN.FUSION_LR},
-                        {"params": model.fusion_attn.parameters(), "lr": config.TRAIN.FUSION_LR},
-                        {"params": model.fusion_token, "lr": config.TRAIN.FUSION_LR},
-                        {"params": model.fusion_token_proj.parameters(), "lr": config.TRAIN.FUSION_LR},
-                        {"params": model.proj.parameters(), "lr": config.TRAIN.FUSION_LR},
+                        {"params": model.fusion.parameters(), "lr": config.TRAIN.FUSION_LR},
                         {"params": criterion.logit_scale, "lr": config.TRAIN.TEMP_LR},
                     ],
                     lr=config.TRAIN.FUSION_LR,

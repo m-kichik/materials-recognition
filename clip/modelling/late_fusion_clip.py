@@ -6,6 +6,8 @@ import torch.nn as nn
 
 from transformers import CLIPProcessor, CLIPModel
 
+import wandb
+
 
 class ConcatFusion(nn.Module):
     def __init__(
@@ -46,7 +48,7 @@ class MHAFusion(nn.Module):
         self.device = device
 
         self.context_proj = nn.LazyLinear(out_features=out_size).to(device)
-        self.clip_proj = nn.Linear(out_size, out_size).to(device)
+        # self.clip_proj = nn.Linear(out_size, out_size).to(device)
 
         self.fusion_attn = nn.MultiheadAttention(
             embed_dim=out_size,
@@ -55,10 +57,19 @@ class MHAFusion(nn.Module):
             dropout=0.1,
         ).to(device)
 
+        # self.alpha = nn.Parameter(torch.ones([]) * torch.tensor(0.5), requires_grad=True).to(device)
+
         self.output_proj = nn.Linear(out_size, out_size).to(device)
 
     def forward(self, clip_features: torch.Tensor, context_embeddings: torch.Tensor):
-        clip_features = self.clip_proj(clip_features.to(self.device))
+        # if wandb.run is not None:
+        #     wandb.log(
+        #         {"train/fusion_alpha": self.alpha.data.item()},
+        #         commit=False,
+        #     )
+
+        clip_features = clip_features.to(self.device)
+        # clip_features = self.clip_proj(clip_features.to(self.device))
         context_features = self.context_proj(context_embeddings.to(self.device))
 
         attn_output, attn_weights = self.fusion_attn(
@@ -68,6 +79,7 @@ class MHAFusion(nn.Module):
         )
 
         fused = attn_output.squeeze(1)
+        # fused = self.alpha * clip_features + (1 - self.alpha) * attn_output.squeeze(1)
 
         fused_embeddings = self.output_proj(fused)
 
