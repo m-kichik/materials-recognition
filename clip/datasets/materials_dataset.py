@@ -4,7 +4,7 @@ MaterialDataset class for handling image-caption pairs.
 
 import json
 import pickle
-from typing import List, Dict, Union, Callable, Tuple
+from typing import List, Dict, Union, Callable, Tuple, Optional
 
 import numpy as np
 from PIL import Image
@@ -27,7 +27,7 @@ class MaterialsDataset(Dataset):
         images_dir: str,
         captions: Union[str, List[Dict[str, str]]],
         captions_key: str = "augmented_caption",
-        materials_path: str = None,
+        materials: str | dict = None,
         embeddings_dir: str = None,
         add_materials_prefix: bool = False,
         preprocess: Callable = None,
@@ -62,13 +62,15 @@ class MaterialsDataset(Dataset):
             )
         self.captions_key = captions_key
         
-        if materials_path is not None:
-            with open(materials_path, "r") as f:
-                materials = json.load(f)
-            self.materials = materials["names"]
-            self.materials_dict = {name: i for i, name in enumerate(self.materials)}
-        else:
-            self.materials = None
+        self.num_materials = None
+        if materials is not None:
+            if isinstance(materials, dict):
+                self.mat2idx = materials
+            elif isinstance(materials, str):
+                with open(materials, "r") as f:
+                    materials = json.load(f)
+                self.mat2idx = {name: i for i, name in enumerate(self.materials)}
+            self.num_materials = len(self.mat2idx)
 
         if embeddings_dir is not None:
             self.load_embeddings = True
@@ -96,22 +98,28 @@ class MaterialsDataset(Dataset):
             Tuple[any, str]: A tuple (image, caption) where image is the processed image tensor,
                              and caption is the corresponding text description.
         """
-        ret_vals = []
+        ret_vals = {}
 
         image_path = f"{self.image_dir}/{self.data[idx]['image']}"
         image = Image.open(image_path)
         if self.preprocess is not None:
             image = self.preprocess(image)
-        ret_vals.append(image)
+        ret_vals["images"] = image
 
         caption = self.data[idx][self.captions_key].lower().strip()[:120]
         if self.add_materials_prefix:
             caption = "an object made of " + caption
-        ret_vals.append(caption)
+        ret_vals["captions"] = caption
 
-        if self.materials is not None:
-            mat_idx = self.materials_dict.get(self.data[idx]["material"])
-            ret_vals.append(mat_idx)
+        if self.num_materials is not None:
+            m_hot_materials = torch.zeros(self.num_materials, dtype=torch.float)
+            material = self.data[idx].get("material")
+            if material is None or material == "n/a":
+                m_hot_materials[self.mat2idx["n/a"]] = 1.0
+            else:
+                for m in [material]:
+                    m_hot_materials[self.mat2idx[m]] = 1.0
+            ret_vals["materials_matrix"] = m_hot_materials
 
         if self.load_embeddings:
             embedding_path = f"{self.embeddings_dir}/{self.data[idx]['image'][:-4].split('_')[0]}.pkl"
@@ -121,6 +129,6 @@ class MaterialsDataset(Dataset):
             if embedding.shape[0] == 1:  # we are responsible for the mistakes we made
                 embedding = torch.squeeze(embedding)
 
-            ret_vals.append(embedding)
+            ret_vals["embeddings"] = embedding
 
-        return tuple(ret_vals)
+        return ret_vals
