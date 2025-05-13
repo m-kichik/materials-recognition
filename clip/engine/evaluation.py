@@ -42,12 +42,13 @@ def evaluate(
     all_times = []
 
     with torch.no_grad():
-        for images, captions in (pbar := tqdm(dataloader)):
+        for batch in (pbar := tqdm(dataloader)):
             pbar.set_description("evaluation")
-            images = images.to(device)
+
+            images = batch["images"].to(device)
+            captions = batch["captions"]
             if len(captions) == 2:
                 captions = random.choice(captions)
-            # text_tokens = clip.tokenize(captions).to(device)
 
             start = time.perf_counter()
             image_features = model.encode_image(images)

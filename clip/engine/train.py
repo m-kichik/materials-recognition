@@ -155,21 +155,21 @@ def train_iterations(
     for iter_ in (pbar := tqdm(range(n_iterations))):
         model.train()
         try:
-            images, captions = next(train_iter)
-            images = images.to(device)
-            if len(captions) == 2:
-                captions = random.choice(captions)
-            # text_tokens = clip.tokenize(captions).to(device)
+            batch = next(train_iter)
+            batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
+            images = batch["images"].to(device)
+            if len(batch["captions"]) == 2:
+                batch["captions"] = random.choice(batch["captions"])
 
             image_features = model.encode_image(images)
             if freeze_text:
                 with torch.no_grad():
-                    text_features = model.encode_text(captions)
+                    text_features = model.encode_text(batch["captions"])
             else:
-                text_features = model.encode_text(captions)
+                text_features = model.encode_text(batch["captions"])
 
-            loss, loss_i, loss_t = criterion(
-                image_features, text_features, freeze_text=freeze_text
+            loss = criterion(
+                image_features, text_features, freeze_text=freeze_text, **batch
             )
             loss = loss / accumulation_steps
 
@@ -188,9 +188,6 @@ def train_iterations(
             if wandb.run is not None:
                 wandb.log(
                     {
-                        "train/loss": loss_val,
-                        "train/loss_images": loss_i,
-                        "train/loss_text": loss_t,
                         "train/lr": current_lr,
                     }
                 )

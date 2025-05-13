@@ -56,6 +56,9 @@ class CLIPLoss(torch.nn.Module):
 
         self.log_wandb = log_wandb
 
+    def get_t(self):
+        return 1 / self.logit_scale.exp()
+
     def forward(self, image_features, text_features, **kwargs):
         """
         Compute the CLIP loss between image and text features.
@@ -67,11 +70,6 @@ class CLIPLoss(torch.nn.Module):
         Returns:
             tuple: (total loss, image-text contrastive loss, text-image contrastive loss)
         """
-        if self.log_wandb and wandb.run is not None:
-            wandb.log(
-                {"train/criterion_log_scale": self.logit_scale.data.item()},
-                commit=False,
-            )
         image_features = F.normalize(image_features, dim=-1)
         text_features = F.normalize(text_features, dim=-1)
 
@@ -88,7 +86,18 @@ class CLIPLoss(torch.nn.Module):
         loss_t = F.cross_entropy(logits_per_text, labels)
         loss = (loss_i + loss_t) / 2
 
-        return loss, loss_i, loss_t
+        if self.log_wandb and wandb.run is not None:
+            wandb.log(
+                {
+                    "train/criterion_log_scale": self.logit_scale.data.item(),
+                    "train/clip_loss": loss.item(),
+                    "train/loss_images": loss_i.item(),
+                    "train/loss_text": loss_t.item()
+                },
+                commit=False,
+            )
+
+        return loss
     
 
 class ReCLIPLoss(torch.nn.Module):
@@ -205,3 +214,52 @@ class SigLIPLoss(torch.nn.Module):
             torch.tensor([0]),
             torch.tensor([0]),
         )  # for conformity with vanilla loss and logging
+
+
+class CLIPMatSIM(torch.nn.Module):
+    def __init__(self, clip_loss, S: torch.Tensor, lambda_=0.5, temperature=0.07, eps=1e-8, log_wandb: bool = False):
+        super().__init__()
+        self.clip_loss = clip_loss
+
+        self.register_buffer('S', S)
+        self.lambda_ = lambda_
+        # self.tau = temperature
+        self.eps = eps
+
+        self.log_wandb = log_wandb
+
+    def forward(self, image_features, text_features, materials_matrix, **kwargs):
+        B, D = image_features.shape
+
+        image_features = F.normalize(image_features, dim=-1)
+        text_features = F.normalize(text_features, dim=-1)
+
+        z = torch.cat([image_features, text_features], dim=0)
+        mats = torch.cat([materials_matrix, materials_matrix], dim=0)
+        sim = (z @ z.t()) * self.clip.get_t() # / self.tau
+
+        mask = ~torch.eye(2 * B, device=sim.device, dtype=torch.bool)
+
+        soft_w = mats @ self.S @ mats.T
+        soft_w = soft_w * mask.float()
+
+        logits = sim - torch.logsumexp(sim * mask, dim=1, keepdim=True)
+
+        row_sum_w = soft_w.sum(dim=1) + self.eps
+        log_pos = (soft_w * logits).sum(dim=1) / row_sum_w
+
+        mat_loss = - log_pos.mean()
+
+        clip_loss = self.clip_loss(image_features, text_features, **kwargs)
+        loss = clip_loss + self.lambda_ * mat_loss
+
+        if self.log_wandb and wandb.run is not None:
+            wandb.log(
+                {
+                    "train/material_loss": mat_loss.item(),
+                    "train/loss": loss.item(),
+                },
+                commit=False,
+            )
+
+        return loss

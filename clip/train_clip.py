@@ -84,35 +84,7 @@ def main():
     log_format = "%(asctime)s - %(levelname)s - %(message)s"
     logging.basicConfig(filename=log_filename, level=logging.INFO, format=log_format)
 
-    model, preprocess, loss, optimizer = build_experiment(config, device=device)
-
-    train_images_path = config.TRAIN.IMAGES_PATH
-    val_images_path = config.EVAL.IMAGES_PATH
-
-    with open(
-        config.TRAIN.CAPTIONS_PATH,
-        "r",
-    ) as f:
-        train_data = json.load(f)
-
-    with open(
-        config.EVAL.CAPTIONS_PATH,
-        "r",
-    ) as f:
-        val_data = json.load(f)
-
-    train_dataset = MaterialsDataset(
-        train_images_path,
-        train_data,
-        add_materials_prefix=add_materials_prefix,
-        preprocess=preprocess,
-    )
-    eval_dataset = MaterialsDataset(
-        val_images_path,
-        val_data,
-        add_materials_prefix=add_materials_prefix,
-        preprocess=preprocess,
-    )
+    model, loss, optimizer, train_dataset, eval_dataset = build_experiment(config, device=device)
 
     train_loader = DataLoader(
         train_dataset,
