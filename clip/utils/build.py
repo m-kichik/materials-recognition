@@ -6,7 +6,7 @@ import torch
 
 from .config import Config
 from datasets.materials_dataset import MaterialsDataset
-from engine.criterion import vanilla_clip_loss, CLIPLoss, ReCLIPLoss, SigLIPLoss, CLIPMatSIM
+from engine.criterion import vanilla_clip_loss, CLIPLoss, ReCLIPLoss, SigLIPLoss, CLIPMatSIM, TextLoss
 from modelling import CLIP, LFCLIP, MLPCLIP
 
 
@@ -16,12 +16,17 @@ def build_experiment(
 ):
     model, preprocess = build_model(config, device=device)
 
-    S, materials_dict = None, None
-    if config.TRAIN.BUILD_MATERIALS:
-        S, materials_dict = build_materials(
-            [config.TRAIN.CAPTIONS_PATH, config.EVAL.CAPTIONS_PATH], device=device
+    S_cat, categories_dict = None, None
+    if config.TRAIN.BUILD_CATEGORIES:
+        S_cat, categories_dict = build_categories(
+            [config.TRAIN.CAPTIONS_PATH, config.EVAL.CAPTIONS_PATH], key="category", device=device
         )
-    criterion = build_criterion(config, S=S, device=device)
+    S_mat, materials_dict = None, None
+    if config.TRAIN.BUILD_MATERIALS:
+        S_mat, materials_dict = build_materials(
+            [config.TRAIN.CAPTIONS_PATH, config.EVAL.CAPTIONS_PATH], key="material", device=device
+        )
+    criterion = build_criterion(config, S={"S_cat": S_cat, "S_mat": S_mat}, device=device)
     optimizer = build_optimizer(model, criterion, config, device=device)
 
     train_dataset = build_dataset(
@@ -38,8 +43,17 @@ def build_model(config: Config, device: str = "cpu"):
     model_type = config.MODEL.TYPE
     clip_model_name = config.MODEL.CLIP_BACKBONE
 
-    if model_type in ["vanilla_clip", "clip", "siglip"]:
-        if config.TRAIN.PRETRAINED:
+    pretrained = (
+        config.TRAIN.PRETRAINED if (
+            config.TRAIN is not None and config.TRAIN.PRETRAINED is not None
+        )
+        else config.PRETRAINED
+    )
+    if pretrained is None:
+        pretrained = False
+
+    if model_type in ["vanilla_clip", "vanilla_clip_text", "clip", "siglip"]:
+        if pretrained:
             model = CLIP(clip_model_name, device=device)
             preprocess = model.preprocess
         else:
@@ -75,7 +89,7 @@ def build_model(config: Config, device: str = "cpu"):
     return model, preprocess
 
 
-def build_criterion(config: Config, S: torch.tensor = None, device: str = "cpu"):
+def build_criterion(config: Config, S: Dict = None, device: str = "cpu"):
     loss_type = config.TRAIN.CRITERION
 
     if loss_type == "vanilla":
@@ -105,7 +119,10 @@ def build_criterion(config: Config, S: torch.tensor = None, device: str = "cpu")
     elif loss_type == "CLIPMatSIM":
         t = config.TRAIN.TEMPERATURE
         clip_loss = CLIPLoss(t, log_wandb=config.TRAIN.WANDB)
-        criterion = CLIPMatSIM(clip_loss, S, lambda_=config.TRAIN.LAMBDA, log_wandb=config.TRAIN.WANDB)
+        criterion = CLIPMatSIM(clip_loss, S["S_mat"], lambda_=config.TRAIN.LAMBDA, log_wandb=config.TRAIN.WANDB)
+
+    elif loss_type == "Text":
+        criterion = None
     else:
         raise NotImplementedError(f"Loss {loss_type} is not implemented.")
 
@@ -155,25 +172,24 @@ def build_optimizer(
 
 def build_dataset(
     config: Config,
-    ds_config: Config,
     preprocess: Callable,
     materials_dict: Dict = None,
 ):
     dataset = MaterialsDataset(
-        ds_config.IMAGES_PATH,
-        ds_config.CAPTIONS_PATH,
-        captions_key=config.TRAIN.CAPTION_KEY,
-        add_materials_prefix=config.TRAIN.ADD_MATERIALS_PREFIX,
+        config.IMAGES_PATH,
+        config.CAPTIONS_PATH,
+        captions_key=config.CAPTION_KEY,
+        add_materials_prefix=config.ADD_MATERIALS_PREFIX,
         materials=materials_dict,
-        embeddings_dir=ds_config.EMBEDDINGS_PATH,
+        embeddings_dir=config.EMBEDDINGS_PATH,
         preprocess=preprocess,
     )
 
     return dataset
 
 
-def build_materials(
-    caption_paths: List[str], model_name: str = "all-mpnet-base-v2", device="cpu"
+def build_categories(
+    caption_paths: List[str], key_: str = "material", model_name: str = "all-mpnet-base-v2", device="cpu"
 ):
     if model_name != "all-mpnet-base-v2":
         raise NotImplementedError(
@@ -186,22 +202,22 @@ def build_materials(
         "sentence-transformers/all-mpnet-base-v2", device=device
     )
 
-    all_materials = set()
+    all_categories = set()
     for path in caption_paths:
         with open(path, "r") as file:
             captions = json.load(file)
             for item in captions:
-                material = item.get("material")
-                if material is not None:
-                    all_materials.update(material)
+                category = item.get(key_)
+                if category is not None:
+                    all_categories.update(category)
 
-    unique_materials = sorted(list(all_materials))
-    if "棉" in unique_materials:
-        unique_materials.remove("棉")
-    if '泥土' in unique_materials:
-        unique_materials.remove("泥土")
+    unique_categories = sorted(list(all_categories))
+    if "棉" in unique_categories:
+        unique_categories.remove("棉")
+    if '泥土' in unique_categories:
+        unique_categories.remove("泥土")
 
-    embeddings = model.encode(unique_materials)
+    embeddings = model.encode(unique_categories)
     normalized_embeddings = torch.nn.functional.normalize(
         torch.tensor(embeddings), dim=1
     )
@@ -212,4 +228,4 @@ def build_materials(
     del embeddings
     del normalized_embeddings
 
-    return S, {item: idx for idx, item in enumerate(unique_materials)}
+    return S, {item: idx for idx, item in enumerate(unique_categories)}

@@ -1,0 +1,14 @@
+PROJECT_NAME: "MATERIALS"
+EXPERIMENT_NAME: "clip-base"
+
+MODEL:
+  TYPE: "vanilla_clip"
+  CLIP_BACKBONE: "openai/clip-vit-base-patch32"
+
+ADD_MATERIALS_PREFIX: False
+CAPTION_KEY: "caption"
+BATCH_SIZE: 64
+NUM_WORKERS: 4
+PRETRAINED: True
+IMAGES_PATH: "/home/jovyan/kichik/materials-recognition/dataset/val2017_cropped_blurred_pad_small"
+CAPTIONS_PATH: "/home/jovyan/kichik/materials-recognition/dataset/val_base_anno_materials_preview.json"

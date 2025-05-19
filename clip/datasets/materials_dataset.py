@@ -28,6 +28,7 @@ class MaterialsDataset(Dataset):
         captions: Union[str, List[Dict[str, str]]],
         captions_key: str = "augmented_caption",
         materials: str | dict = None,
+        categories: str | dict = None,
         embeddings_dir: str = None,
         add_materials_prefix: bool = False,
         preprocess: Callable = None,
@@ -61,6 +62,16 @@ class MaterialsDataset(Dataset):
                 "Captions should be path to json file or list with captions."
             )
         self.captions_key = captions_key
+
+        self.num_categories = None
+        if categories is not None:
+            if isinstance(categories, dict):
+                self.cat2idx = categories
+            elif isinstance(categories, str):
+                with open(categories, "r") as f:
+                    categories = json.load(f)
+                self.cat2idx = {name: i for i, name in enumerate(categories)}
+            self.num_categories = len(self.cat2idx)
         
         self.num_materials = None
         if materials is not None:
@@ -69,7 +80,7 @@ class MaterialsDataset(Dataset):
             elif isinstance(materials, str):
                 with open(materials, "r") as f:
                     materials = json.load(f)
-                self.mat2idx = {name: i for i, name in enumerate(self.materials)}
+                self.mat2idx = {name: i for i, name in enumerate(materials)}
             self.num_materials = len(self.mat2idx)
 
         if embeddings_dir is not None:
@@ -110,6 +121,15 @@ class MaterialsDataset(Dataset):
         if self.add_materials_prefix:
             caption = "an object made of " + caption
         ret_vals["captions"] = caption
+
+        if self.num_categories is not None:
+            m_hot_categories = torch.zeros(self.num_categories, dtype=torch.float)
+            categories = self.data[idx].get("category")
+            for c in categories:
+                if c not in self.cat2idx:
+                    c = "n/a"
+                m_hot_categories[self.mcat2idx[c]] = 1.0
+            ret_vals["categories_matrix"] = m_hot_categories
 
         if self.num_materials is not None:
             m_hot_materials = torch.zeros(self.num_materials, dtype=torch.float)

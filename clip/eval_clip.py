@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 
 from datasets.materials_dataset import MaterialsDataset
 from engine import evaluate
-from utils import set_seed, parse_config
+from utils import set_seed, parse_config, build_dataset, build_model
 
 set_seed(0)
 
@@ -47,27 +47,36 @@ def main():
 
     ckpt_metric = "mrr"  # mcs, mrr, recall_1, recall_5, recall_10
     ckpt_path = f"training_results/{exp_name}/{model_name.replace('/', '_')}_best_{ckpt_metric}.pth"
-    add_materials_prefix = config.TRAIN.ADD_MATERIALS_PREFIX
+    add_materials_prefix = config.ADD_MATERIALS_PREFIX
+    if add_materials_prefix is None and config.TRAIN is not None:
+        add_materials_prefix = config.TRAIN.ADD_MATERIALS_PREFIX
 
-    model, preprocess = clip.load(model_name, device=device)
+    # model, preprocess = clip.load(model_name, device=device)
+    model, preprocess = build_model(config, device=device)
     model = model.to(torch.float32)
 
-    model.load_state_dict(torch.load(ckpt_path, weights_only=True))
+    if not config.PRETRAINED:
+        model.load_state_dict(torch.load(ckpt_path, weights_only=True))
 
-    val_images_path = config.EVAL.IMAGES_PATH
+    # val_images_path = config.EVAL.IMAGES_PATH
 
-    with open(
-        config.EVAL.CAPTIONS_PATH,
-        "r",
-    ) as f:
-        val_data = json.load(f)
+    # with open(
+    #     config.EVAL.CAPTIONS_PATH,
+    #     "r",
+    # ) as f:
+    #     val_data = json.load(f)
 
-    eval_dataset = MaterialsDataset(
-        val_images_path,
-        val_data,
-        add_materials_prefix=add_materials_prefix,
-        preprocess=preprocess,
+    # eval_dataset = MaterialsDataset(
+    #     val_images_path,
+    #     val_data,
+    #     add_materials_prefix=add_materials_prefix,
+    #     preprocess=preprocess,
+    # )
+    eval_dataset = build_dataset(
+        config,
+        preprocess
     )
+    
     eval_loader = DataLoader(
         eval_dataset,
         batch_size=val_batch_size,
