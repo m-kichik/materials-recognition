@@ -113,12 +113,11 @@ class MaterialsDataset(Dataset):
 
         if self.num_materials is not None:
             m_hot_materials = torch.zeros(self.num_materials, dtype=torch.float)
-            material = self.data[idx].get("material")
-            if material is None or material == "n/a":
-                m_hot_materials[self.mat2idx["n/a"]] = 1.0
-            else:
-                for m in [material]:
-                    m_hot_materials[self.mat2idx[m]] = 1.0
+            materials = self.data[idx].get("material")
+            for m in materials:
+                if m not in self.mat2idx:
+                    m = "n/a"
+                m_hot_materials[self.mat2idx[m]] = 1.0
             ret_vals["materials_matrix"] = m_hot_materials
 
         if self.load_embeddings:

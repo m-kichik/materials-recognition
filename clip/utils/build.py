@@ -105,7 +105,7 @@ def build_criterion(config: Config, S: torch.tensor = None, device: str = "cpu")
     elif loss_type == "CLIPMatSIM":
         t = config.TRAIN.TEMPERATURE
         clip_loss = CLIPLoss(t, log_wandb=config.TRAIN.WANDB)
-        criterion = CLIPMatSIM(clip_loss, S, log_wandb=config.TRAIN.WANDB)
+        criterion = CLIPMatSIM(clip_loss, S, lambda_=config.TRAIN.LAMBDA, log_wandb=config.TRAIN.WANDB)
     else:
         raise NotImplementedError(f"Loss {loss_type} is not implemented.")
 
@@ -123,7 +123,7 @@ def build_optimizer(
     model_type = config.MODEL.TYPE
 
     param_groups = []
-    if model_type == "vanilla_clip":
+    if model_type in ["vanilla_clip", "siglip"]:
         param_groups.append({"params": model.parameters()})
 
     elif model_type == "late_fusion_clip":
@@ -165,6 +165,7 @@ def build_dataset(
         captions_key=config.TRAIN.CAPTION_KEY,
         add_materials_prefix=config.TRAIN.ADD_MATERIALS_PREFIX,
         materials=materials_dict,
+        embeddings_dir=ds_config.EMBEDDINGS_PATH,
         preprocess=preprocess,
     )
 
@@ -191,13 +192,14 @@ def build_materials(
             captions = json.load(file)
             for item in captions:
                 material = item.get("material")
-                if material is not None and material != "n/a":
-                    all_materials.update([material])
+                if material is not None:
+                    all_materials.update(material)
 
     unique_materials = sorted(list(all_materials))
     if "棉" in unique_materials:
         unique_materials.remove("棉")
-    unique_materials.append("n/a")
+    if '泥土' in unique_materials:
+        unique_materials.remove("泥土")
 
     embeddings = model.encode(unique_materials)
     normalized_embeddings = torch.nn.functional.normalize(

@@ -389,20 +389,23 @@ def train_fusion_iterations(
     for iter_ in (pbar := tqdm(range(n_iterations))):
         model.train()
         try:
-            images, captions, embeddings = next(train_iter)
+            batch = next(train_iter)
+            images = batch["images"].to(device)
+            if len(batch["captions"]) == 2:
+                batch["captions"] = random.choice(batch["captions"])
+            embeddings = batch["embeddings"]
+
             images = images.to(device)
             embeddings = embeddings.to(device)
-            if len(captions) == 2:
-                captions = random.choice(captions)
 
             image_features = model.encode_image(images, embeddings)
             if freeze_text:
                 with torch.no_grad():
-                    text_features = model.encode_text(captions)
+                    text_features = model.encode_text(batch["captions"])
             else:
-                text_features = model.encode_text(captions)
+                text_features = model.encode_text(batch["captions"])
 
-            loss, loss_i, loss_t = criterion(
+            loss = criterion(
                 image_features, text_features, freeze_text=freeze_text
             )
             loss = loss / accumulation_steps
@@ -422,9 +425,6 @@ def train_fusion_iterations(
             if wandb.run is not None:
                 wandb.log(
                     {
-                        "train/loss": loss_val,
-                        "train/loss_images": loss_i,
-                        "train/loss_text": loss_t,
                         "train/lr": current_lr,
                     }
                 )

@@ -188,15 +188,6 @@ class SigLIPLoss(torch.nn.Module):
         Returns:
             torch.Tensor: A scalar loss value.
         """
-        if self.log_wandb and wandb.run is not None:
-            wandb.log(
-                {
-                    "train/criterion_t_prime": self.t_prime.data.item(),
-                    "train/criterion_bias": self.bias.data.item(),
-                },
-                commit=False,
-            )
-
         zimg = F.normalize(img_emb, p=2, dim=1)
         ztxt = F.normalize(txt_emb, p=2, dim=1)
 
@@ -209,11 +200,17 @@ class SigLIPLoss(torch.nn.Module):
 
         loss = -F.logsigmoid(labels * logits).sum() / batch_size
 
-        return (
-            loss,
-            torch.tensor([0]),
-            torch.tensor([0]),
-        )  # for conformity with vanilla loss and logging
+        if self.log_wandb and wandb.run is not None:
+            wandb.log(
+                {
+                    "train/criterion_t_prime": self.t_prime.data.item(),
+                    "train/criterion_bias": self.bias.data.item(),
+                    "train/siglip_loss": loss.item()
+                },
+                commit=False,
+            )
+
+        return loss
 
 
 class CLIPMatSIM(torch.nn.Module):
@@ -236,7 +233,7 @@ class CLIPMatSIM(torch.nn.Module):
 
         z = torch.cat([image_features, text_features], dim=0)
         mats = torch.cat([materials_matrix, materials_matrix], dim=0)
-        sim = (z @ z.t()) * self.clip.get_t() # / self.tau
+        sim = (z @ z.t()) # * self.clip_loss.get_t() # / self.tau
 
         mask = ~torch.eye(2 * B, device=sim.device, dtype=torch.bool)
 

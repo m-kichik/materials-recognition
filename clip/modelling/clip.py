@@ -5,7 +5,7 @@ import PIL
 import torch
 import torch.nn as nn
 
-from transformers import CLIPProcessor, CLIPModel
+from transformers import AutoProcessor, AutoModel, CLIPProcessor, CLIPModel
 
 
 class CLIP(nn.Module):
@@ -17,8 +17,17 @@ class CLIP(nn.Module):
         super().__init__()
         self.device = device
 
-        self.clip = CLIPModel.from_pretrained(clip_model_name).to(device)
-        self.processor = CLIPProcessor.from_pretrained(clip_model_name)
+        if clip_model_name.startswith("openai/clip"):
+            self.clip = CLIPModel.from_pretrained(clip_model_name).to(device)
+            self.processor = CLIPProcessor.from_pretrained(clip_model_name)
+        elif clip_model_name.startswith("google/siglip"):
+            self.clip = AutoModel.from_pretrained(
+                clip_model_name, 
+                device_map=device,
+                )
+            self.processor = AutoProcessor.from_pretrained(clip_model_name)
+        else:
+            raise NotImplementedError(f"Support for {clip_model_name} is not implemented.")
 
     def preprocess(self, images):
         images = self.processor(images=[images], return_tensors="pt", padding=True)

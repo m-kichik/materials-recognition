@@ -32,7 +32,7 @@ def get_args():
     parser.add_argument(
         "--device",
         type=str,
-        default="cuda",
+        default="cuda:1",
         help="device to run the experiment",
     )
     return parser.parse_args()
@@ -82,24 +82,25 @@ def main():
     log_format = "%(asctime)s - %(levelname)s - %(message)s"
     logging.basicConfig(filename=log_filename, level=logging.INFO, format=log_format)
 
-    model, preprocess, loss, optimizer = build_experiment(config, device=device)
+    # model, preprocess, loss, optimizer = build_experiment(config, device=device)
+    model, loss, optimizer, train_dataset, eval_dataset = build_experiment(config, device=device)
 
-    train_dataset = MaterialsDataset(
-        config.TRAIN.IMAGES_PATH,
-        config.TRAIN.CAPTIONS_PATH,
-        captions_key=config.TRAIN.CAPTION_KEY,
-        embeddings_dir=config.TRAIN.EMBEDDINGS_PATH,
-        add_materials_prefix=add_materials_prefix,
-        preprocess=preprocess
-    )
-    eval_dataset = MaterialsDataset(
-        config.EVAL.IMAGES_PATH,
-        config.EVAL.CAPTIONS_PATH,
-        captions_key=config.EVAL.CAPTION_KEY,
-        embeddings_dir=config.EVAL.EMBEDDINGS_PATH,
-        add_materials_prefix=add_materials_prefix,
-        preprocess=preprocess
-    )
+    # train_dataset = MaterialsDataset(
+    #     config.TRAIN.IMAGES_PATH,
+    #     config.TRAIN.CAPTIONS_PATH,
+    #     captions_key=config.TRAIN.CAPTION_KEY,
+    #     embeddings_dir=config.TRAIN.EMBEDDINGS_PATH,
+    #     add_materials_prefix=add_materials_prefix,
+    #     preprocess=preprocess
+    # )
+    # eval_dataset = MaterialsDataset(
+    #     config.EVAL.IMAGES_PATH,
+    #     config.EVAL.CAPTIONS_PATH,
+    #     captions_key=config.EVAL.CAPTION_KEY,
+    #     embeddings_dir=config.EVAL.EMBEDDINGS_PATH,
+    #     add_materials_prefix=add_materials_prefix,
+    #     preprocess=preprocess
+    # )
 
     train_loader = DataLoader(
         train_dataset,

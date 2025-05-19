@@ -123,7 +123,11 @@ def evaluate_fusion_lazy(
     all_times = []
 
     with torch.no_grad():
-        for images, captions, embeddings in (pbar := tqdm(dataloader)):
+        for batch in (pbar := tqdm(dataloader)):
+            images = batch["images"].to(device)
+            captions = batch["captions"]
+            embeddings = batch["embeddings"]
+
             pbar.set_description("evaluation")
             images = images.to(device)
             embeddings = embeddings.to(device)

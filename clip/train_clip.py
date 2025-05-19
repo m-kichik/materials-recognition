@@ -105,6 +105,7 @@ def main():
     clip_metrics = {"pretrain/" + k: v for k, v in clip_metrics.items()}
     if wandb.run is not None:
         wandb.log(clip_metrics)
+    print(clip_metrics)
 
     train_iterations(
         model,
