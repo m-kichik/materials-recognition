@@ -1,0 +1,32 @@
+PROJECT_NAME: "MATERIALS"
+EXPERIMENT_NAME: "siglip-base-t15-b-9"
+MODEL:
+  TYPE: "siglip"
+  CLIP_BACKBONE: "openai/clip-vit-base-patch32"
+TRAIN:
+  PRETRAINED: True
+  BATCH_SIZE: 512
+  NUM_WORKERS: 4
+  FREEZE_TEXT: False
+  ADD_MATERIALS_PREFIX: False
+  CLIP_LR: True
+  WARMUP: 0.1
+  GRADIENT_ACCUMULATION_STEPS: 1
+  LR: 5e-6
+  CRITERION: "SigLIP"
+  # TEMPERATURE: 10.0
+  # BIAS: -10.0
+  TEMPERATURE: 15.0
+  BIAS: -9.0
+  TEMP_LR: 1e-4
+  ITERS: 20000
+  EVAL_INTERVAL: 1000
+  IMAGES_PATH: "/home/docker_user/datasets/train2017_cropped_blurred_pad_small"
+  CAPTIONS_PATH: "/home/docker_user/datasets/captions/train_base_anno.json"
+  CAPTION_KEY: "caption"
+  WANDB: True
+EVAL:
+  BATCH_SIZE: 64
+  NUM_WORKERS: 4
+  IMAGES_PATH: "/home/docker_user/datasets/val2017_cropped_blurred_pad_small"
+  CAPTIONS_PATH: "/home/docker_user/datasets/captions/val_base_anno.json"
