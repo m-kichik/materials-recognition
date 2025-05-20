@@ -6,7 +6,7 @@ import torch
 
 from .config import Config
 from datasets.materials_dataset import MaterialsDataset
-from engine.criterion import vanilla_clip_loss, CLIPLoss, ReCLIPLoss, SigLIPLoss, CLIPMatSIM, TextLoss
+from engine.criterion import vanilla_clip_loss, CLIPLoss, ReCLIPLoss, SigLIPLoss, CLIPMatSIM#, TextLoss
 from modelling import CLIP, LFCLIP, MLPCLIP
 
 
@@ -19,21 +19,21 @@ def build_experiment(
     S_cat, categories_dict = None, None
     if config.TRAIN.BUILD_CATEGORIES:
         S_cat, categories_dict = build_categories(
-            [config.TRAIN.CAPTIONS_PATH, config.EVAL.CAPTIONS_PATH], key="category", device=device
+            [config.TRAIN.CAPTIONS_PATH, config.EVAL.CAPTIONS_PATH], key_="category", device=device
         )
     S_mat, materials_dict = None, None
     if config.TRAIN.BUILD_MATERIALS:
-        S_mat, materials_dict = build_materials(
-            [config.TRAIN.CAPTIONS_PATH, config.EVAL.CAPTIONS_PATH], key="material", device=device
+        S_mat, materials_dict = build_categories(
+            [config.TRAIN.CAPTIONS_PATH, config.EVAL.CAPTIONS_PATH], key_="material", device=device
         )
     criterion = build_criterion(config, S={"S_cat": S_cat, "S_mat": S_mat}, device=device)
     optimizer = build_optimizer(model, criterion, config, device=device)
 
     train_dataset = build_dataset(
-        config, config.TRAIN, preprocess=preprocess, materials_dict=materials_dict
+        config.TRAIN, preprocess=preprocess, materials_dict=materials_dict
     )
     val_dataset = build_dataset(
-        config, config.EVAL, preprocess=preprocess, materials_dict=materials_dict
+        config.EVAL, preprocess=preprocess, materials_dict=materials_dict
     )
 
     return model, criterion, optimizer, train_dataset, val_dataset

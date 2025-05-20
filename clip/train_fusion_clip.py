@@ -32,7 +32,7 @@ def get_args():
     parser.add_argument(
         "--device",
         type=str,
-        default="cuda:1",
+        default="cuda",
         help="device to run the experiment",
     )
     return parser.parse_args()

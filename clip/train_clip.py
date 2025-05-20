@@ -101,11 +101,11 @@ def main():
         drop_last=True,
     )
 
-    clip_metrics, _ = evaluate(model, eval_loader, device=device)
-    clip_metrics = {"pretrain/" + k: v for k, v in clip_metrics.items()}
-    if wandb.run is not None:
-        wandb.log(clip_metrics)
-    print(clip_metrics)
+    # clip_metrics, _ = evaluate(model, eval_loader, device=device)
+    # clip_metrics = {"pretrain/" + k: v for k, v in clip_metrics.items()}
+    # if wandb.run is not None:
+    #     wandb.log(clip_metrics)
+    # print(clip_metrics)
 
     train_iterations(
         model,

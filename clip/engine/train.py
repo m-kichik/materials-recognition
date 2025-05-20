@@ -157,7 +157,7 @@ def train_iterations(
         try:
             batch = next(train_iter)
             batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
-            images = batch["images"].to(device)
+            images = batch["images"]
             if len(batch["captions"]) == 2:
                 batch["captions"] = random.choice(batch["captions"])
 
@@ -390,7 +390,8 @@ def train_fusion_iterations(
         model.train()
         try:
             batch = next(train_iter)
-            images = batch["images"].to(device)
+            batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
+            images = batch["images"]
             if len(batch["captions"]) == 2:
                 batch["captions"] = random.choice(batch["captions"])
             embeddings = batch["embeddings"]
@@ -406,7 +407,7 @@ def train_fusion_iterations(
                 text_features = model.encode_text(batch["captions"])
 
             loss = criterion(
-                image_features, text_features, freeze_text=freeze_text
+                image_features, text_features, freeze_text=freeze_text, **batch
             )
             loss = loss / accumulation_steps
 
