@@ -5,7 +5,7 @@ MODEL:
   CLIP_BACKBONE: "openai/clip-vit-base-patch32"
 TRAIN:
   PRETRAINED: True
-  BATCH_SIZE: 500
+  BATCH_SIZE: 2
   NUM_WORKERS: 4
   FREEZE_TEXT: False
   ADD_MATERIALS_PREFIX: False
@@ -14,19 +14,25 @@ TRAIN:
   GRADIENT_ACCUMULATION_STEPS: 1
   LR: 5e-6
   CRITERION: "Text"
-  LAMBDA: 1
+  LAMBDA: 1.0
+  ALPHA: 1.0 # balance categories in MSE
+  BETA: 1.0 # balance materials in MSE
+  TAU: 0.1 # temperature for embeddings similarity
+  TAU_CAT: 0.5 # temperature for categories similarity
+  TAU_MAT: 0.5 # temperature for materials similarity
+  GAMMA: 1.0 # SupCon coeff
   BUILD_MATERIALS: True
   BUILD_CATEGORIES: True
   TEMPERATURE: 0.07
   TEMP_LR: 1e-4
   ITERS: 20000
   EVAL_INTERVAL: 1000
-  IMAGES_PATH: "/home/docker_user/datasets/train2017_cropped_blurred_pad_small"
-  CAPTIONS_PATH: "/home/docker_user/datasets/captions/train_base_anno_materials_preview.json"
+  IMAGES_PATH: "/Users/rito4ka/dev/diploma/data/train2017_cropped_blurred_pad_small"
+  CAPTIONS_PATH: "/Users/rito4ka/dev/diploma/materials-recognition/base_anno/final_/train_base_anno_materials_preview.json"
   CAPTION_KEY: "caption"
-  WANDB: True
+  WANDB: False
 EVAL:
-  BATCH_SIZE: 64
+  BATCH_SIZE: 2
   NUM_WORKERS: 4
-  IMAGES_PATH: "/home/docker_user/datasets/val2017_cropped_blurred_pad_small"
-  CAPTIONS_PATH: "/home/docker_user/datasets/captions/val_base_anno_materials_preview.json"
+  IMAGES_PATH: "/Users/rito4ka/dev/diploma/data/val2017_cropped_blurred_pad_small"
+  CAPTIONS_PATH: "/Users/rito4ka/dev/diploma/materials-recognition/base_anno/final_/val_base_anno_materials_preview.json"

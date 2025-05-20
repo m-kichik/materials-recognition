@@ -6,7 +6,7 @@ import torch
 
 from .config import Config
 from datasets.materials_dataset import MaterialsDataset
-from engine.criterion import vanilla_clip_loss, CLIPLoss, ReCLIPLoss, SigLIPLoss, CLIPMatSIM#, TextLoss
+from engine.criterion import vanilla_clip_loss, CLIPLoss, ReCLIPLoss, SigLIPLoss, CLIPMatSIM, TextLoss
 from modelling import CLIP, LFCLIP, MLPCLIP
 
 
@@ -27,13 +27,13 @@ def build_experiment(
             [config.TRAIN.CAPTIONS_PATH, config.EVAL.CAPTIONS_PATH], key_="material", device=device
         )
     criterion = build_criterion(config, S={"S_cat": S_cat, "S_mat": S_mat}, device=device)
-    optimizer = build_optimizer(model, criterion, config, device=device)
+    optimizer = build_optimizer(model, criterion, config)
 
     train_dataset = build_dataset(
-        config.TRAIN, preprocess=preprocess, materials_dict=materials_dict
+        config.TRAIN, preprocess=preprocess, categories_dict=categories_dict, materials_dict=materials_dict
     )
     val_dataset = build_dataset(
-        config.EVAL, preprocess=preprocess, materials_dict=materials_dict
+        config.EVAL, preprocess=preprocess, categories_dict=categories_dict, materials_dict=materials_dict
     )
 
     return model, criterion, optimizer, train_dataset, val_dataset
@@ -122,7 +122,16 @@ def build_criterion(config: Config, S: Dict = None, device: str = "cpu"):
         criterion = CLIPMatSIM(clip_loss, S["S_mat"], lambda_=config.TRAIN.LAMBDA, log_wandb=config.TRAIN.WANDB)
 
     elif loss_type == "Text":
-        criterion = None
+        criterion = TextLoss(
+            S=S,
+            alpha=config.TRAIN.ALPHA,
+            beta=config.TRAIN.BETA,
+            tau=config.TRAIN.TAU,
+            tau_cat=config.TRAIN.TAU_CAT,
+            tau_mat=config.TRAIN.TAU_MAT,
+            gamma=config.TRAIN.GAMMA,
+            log_wandb=config.TRAIN.WANDB
+        )
     else:
         raise NotImplementedError(f"Loss {loss_type} is not implemented.")
 
@@ -135,13 +144,17 @@ def build_optimizer(
     config: Config,
     weight_decay: float = 0.1,
     betas: Tuple[float] = (0.9, 0.98),
-    device: str = "cpu",
 ):
     model_type = config.MODEL.TYPE
 
     param_groups = []
     if model_type in ["vanilla_clip", "siglip"]:
         param_groups.append({"params": model.parameters()})
+
+    elif model_type == "vanilla_clip_text":
+        param_groups.append({"params": model.clip.text_model.parameters()})
+        param_groups.append({"params": model.clip.text_projection.parameters()})
+        param_groups.append({"params": model.clip.logit_scale})
 
     elif model_type == "late_fusion_clip":
         if not config.MODEL.FREEZE_CLIP:
@@ -173,6 +186,7 @@ def build_optimizer(
 def build_dataset(
     config: Config,
     preprocess: Callable,
+    categories_dict: Dict = None,
     materials_dict: Dict = None,
 ):
     dataset = MaterialsDataset(
@@ -180,6 +194,7 @@ def build_dataset(
         config.CAPTIONS_PATH,
         captions_key=config.CAPTION_KEY,
         add_materials_prefix=config.ADD_MATERIALS_PREFIX,
+        categories=categories_dict,
         materials=materials_dict,
         embeddings_dir=config.EMBEDDINGS_PATH,
         preprocess=preprocess,
@@ -196,11 +211,11 @@ def build_categories(
             f"Model {model_name} is not supported for builing embeddings."
         )
 
-    from sentence_transformers import SentenceTransformer
+    # from sentence_transformers import SentenceTransformer
 
-    model = SentenceTransformer(
-        "sentence-transformers/all-mpnet-base-v2", device=device
-    )
+    # model = SentenceTransformer(
+    #     "sentence-transformers/all-mpnet-base-v2", device=device
+    # )
 
     all_categories = set()
     for path in caption_paths:
@@ -217,15 +232,16 @@ def build_categories(
     if '泥土' in unique_categories:
         unique_categories.remove("泥土")
 
-    embeddings = model.encode(unique_categories)
-    normalized_embeddings = torch.nn.functional.normalize(
-        torch.tensor(embeddings), dim=1
-    )
-    S = normalized_embeddings @ normalized_embeddings.T
+    # embeddings = model.encode(unique_categories)
+    # normalized_embeddings = torch.nn.functional.normalize(
+    #     torch.tensor(embeddings), dim=1
+    # )
+    # S = normalized_embeddings @ normalized_embeddings.T
+    S = torch.ones((len(unique_categories), len(unique_categories)))
     S = S.to(device)
 
-    del model
-    del embeddings
-    del normalized_embeddings
+    # del model
+    # del embeddings
+    # del normalized_embeddings
 
     return S, {item: idx for idx, item in enumerate(unique_categories)}

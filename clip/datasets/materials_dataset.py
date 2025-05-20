@@ -128,7 +128,7 @@ class MaterialsDataset(Dataset):
             for c in categories:
                 if c not in self.cat2idx:
                     c = "n/a"
-                m_hot_categories[self.mcat2idx[c]] = 1.0
+                m_hot_categories[self.cat2idx[c]] = 1.0
             ret_vals["categories_matrix"] = m_hot_categories
 
         if self.num_materials is not None:
