@@ -100,11 +100,12 @@ def main():
         drop_last=True,
     )
 
-    clip_metrics, _ = evaluate_text(model, eval_loader, S_cat=loss.S_cat, S_mat=loss.S_mat, device=device)
-    clip_metrics = {"pretrain/" + k: v for k, v in clip_metrics.items()}
+    clip_metrics = evaluate_text(model, eval_loader, S_cat=loss.S_cat.cpu().numpy(), S_mat=loss.S_mat.cpu().numpy(), device=device)
+    clip_metrics = {"pretrain_text/" + k: v for k, v in clip_metrics.items()}
     if wandb.run is not None:
         wandb.log(clip_metrics)
-    print(clip_metrics)
+    for k, v in clip_metrics.items():
+        print(f"{k}: {v:.6f}")
 
     train_iterations_text(
         model,

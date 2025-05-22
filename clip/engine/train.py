@@ -12,7 +12,7 @@ import wandb
 
 import clip
 
-from .evaluation import evaluate, evaluate_fusion_lazy
+from .evaluation import evaluate, evaluate_fusion_lazy, evaluate_embeddings
 from .criterion import vanilla_clip_loss
 from utils import save_ckpt
 
@@ -490,13 +490,12 @@ def train_iterations_text(
     freeze_text: bool = False,
     save_path: str = "clip_train",
 ) -> None:
-    # best_metrics = {
-    #     "recall_1": 0.0,
-    #     "recall_5": 0.0,
-    #     "recall_10": 0.0,
-    #     "mrr": 0.0,
-    #     "mcs": 0.0,
-    # }
+    best_metrics = {
+        "pearson_cat": float("-inf"),
+        "pearson_mat": float("-inf"),
+        "map_cat": 0.0,
+        "map_mat": 0.0,
+    }
 
     if shedule_lr:
         total_optimizer_steps = math.ceil(n_iterations / accumulation_steps)
@@ -523,9 +522,7 @@ def train_iterations_text(
 
             text_features = model.encode_text(batch["captions"])
 
-            loss = criterion(
-                text_features, **batch
-            )
+            loss = criterion(text_features, **batch)
             loss = loss / accumulation_steps
 
             loss.backward()
@@ -543,42 +540,50 @@ def train_iterations_text(
             if wandb.run is not None:
                 wandb.log(
                     {
-                        "train/lr": current_lr,
+                        "train_text/lr": current_lr,
                     }
                 )
 
         except StopIteration:
             train_iter = iter(train_loader)
 
-        # if (iter_ + 1) % eval_interval == 0:
-        #     eval_metrics, _ = evaluate(model, eval_loader, device=device)
+        if (iter_ + 1) % eval_interval == 0:
+            eval_metrics_text = evaluate_embeddings(
+                model,
+                eval_loader,
+                S_cat=criterion.S_cat.cpu().numpy(),
+                S_mat=criterion.S_mat.cpu().numpy(),
+                device=device,
+            )
 
-        #     save_ckpt(
-        #         model,
-        #         model_name.replace("/", "_"),
-        #         {
-        #             "recall_1": eval_metrics["Recall@1"],
-        #             "recall_5": eval_metrics["Recall@5"],
-        #             "recall_10": eval_metrics["Recall@10"],
-        #             "mrr": eval_metrics["MRR"],
-        #             "mcs": eval_metrics["Mean Cosine Similarity"],
-        #         },
-        #         best_metrics,
-        #         best_metrics.keys(),
-        #         save_path,
-        #     )
+            save_ckpt(
+                model,
+                model_name.replace("/", "_"),
+                {
+                    "pearson_cat": eval_metrics_text["pearson_cat"],
+                    "pearson_mat": eval_metrics_text["pearson_mat"],
+                    "map_cat": eval_metrics_text["map_cat"],
+                    "map_mat": eval_metrics_text["map_mat"],
+                },
+                best_metrics,
+                best_metrics.keys(),
+                save_path,
+            )
 
-        #     log_msg = "Metrics - " + f"Iter {iter_ + 1}: "
-        #     log_msg += " | ".join(
-        #         [f"{key}: {value:.4f}" for key, value in eval_metrics.items()]
-        #     )
+            eval_metrics, _ = evaluate(model, eval_loader, device=device)
+            eval_metrics.update(eval_metrics_text)
 
-        #     logging.info(log_msg)
-        #     print(log_msg)
+            log_msg = "Metrics - " + f"Iter {iter_ + 1}: "
+            log_msg += " | ".join(
+                [f"{key}: {value:.4f}" for key, value in eval_metrics.items()]
+            )
 
-        #     if wandb.run is not None:
-        #         eval_metrics = {"eval/" + k: v for k, v in eval_metrics.items()}
-        #         wandb.log(eval_metrics)
+            logging.info(log_msg)
+            print(log_msg)
+
+            if wandb.run is not None:
+                eval_metrics = {"eval_text/" + k: v for k, v in eval_metrics.items()}
+                wandb.log(eval_metrics)
 
     if (n_iterations % accumulation_steps) != 0:
         optimizer.step()

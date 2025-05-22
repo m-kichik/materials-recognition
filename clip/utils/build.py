@@ -6,7 +6,14 @@ import torch
 
 from .config import Config
 from datasets.materials_dataset import MaterialsDataset
-from engine.criterion import vanilla_clip_loss, CLIPLoss, ReCLIPLoss, SigLIPLoss, CLIPMatSIM, TextLoss
+from engine.criterion import (
+    vanilla_clip_loss,
+    CLIPLoss,
+    ReCLIPLoss,
+    SigLIPLoss,
+    CLIPMatSIM,
+    TextLoss,
+)
 from modelling import CLIP, LFCLIP, MLPCLIP
 
 
@@ -19,21 +26,38 @@ def build_experiment(
     S_cat, categories_dict = None, None
     if config.TRAIN.BUILD_CATEGORIES:
         S_cat, categories_dict = build_categories(
-            [config.TRAIN.CAPTIONS_PATH, config.EVAL.CAPTIONS_PATH], key_="category", device=device
+            [config.TRAIN.CAPTIONS_PATH, config.EVAL.CAPTIONS_PATH],
+            key_="category",
+            device=device,
         )
     S_mat, materials_dict = None, None
     if config.TRAIN.BUILD_MATERIALS:
         S_mat, materials_dict = build_categories(
-            [config.TRAIN.CAPTIONS_PATH, config.EVAL.CAPTIONS_PATH], key_="material", device=device
+            [config.TRAIN.CAPTIONS_PATH, config.EVAL.CAPTIONS_PATH],
+            key_="material",
+            device=device,
         )
-    criterion = build_criterion(config, S={"S_cat": S_cat, "S_mat": S_mat}, device=device)
+    criterion = build_criterion(
+        config,
+        S={
+            "S_cat": (S_cat.to(device) if S_cat is not None else None),
+            "S_mat": (S_mat.to(device) if S_cat is not None else None),
+        },
+        device=device,
+    )
     optimizer = build_optimizer(model, criterion, config)
 
     train_dataset = build_dataset(
-        config.TRAIN, preprocess=preprocess, categories_dict=categories_dict, materials_dict=materials_dict
+        config.TRAIN,
+        preprocess=preprocess,
+        categories_dict=categories_dict,
+        materials_dict=materials_dict,
     )
     val_dataset = build_dataset(
-        config.EVAL, preprocess=preprocess, categories_dict=categories_dict, materials_dict=materials_dict
+        config.EVAL,
+        preprocess=preprocess,
+        categories_dict=categories_dict,
+        materials_dict=materials_dict,
     )
 
     return model, criterion, optimizer, train_dataset, val_dataset
@@ -44,9 +68,8 @@ def build_model(config: Config, device: str = "cpu"):
     clip_model_name = config.MODEL.CLIP_BACKBONE
 
     pretrained = (
-        config.TRAIN.PRETRAINED if (
-            config.TRAIN is not None and config.TRAIN.PRETRAINED is not None
-        )
+        config.TRAIN.PRETRAINED
+        if (config.TRAIN is not None and config.TRAIN.PRETRAINED is not None)
         else config.PRETRAINED
     )
     if pretrained is None:
@@ -86,6 +109,12 @@ def build_model(config: Config, device: str = "cpu"):
     else:
         raise NotImplementedError(f"Model {model_type} is not implemented.")
 
+    if config.MODEL.PRETRAINED_CKPT is not None:
+        model.load_state_dict(
+            torch.load(config.MODEL.PRETRAINED_CKPT, weights_only=True),
+            strict=False
+        )
+
     return model, preprocess
 
 
@@ -119,7 +148,12 @@ def build_criterion(config: Config, S: Dict = None, device: str = "cpu"):
     elif loss_type == "CLIPMatSIM":
         t = config.TRAIN.TEMPERATURE
         clip_loss = CLIPLoss(t, log_wandb=config.TRAIN.WANDB)
-        criterion = CLIPMatSIM(clip_loss, S["S_mat"], lambda_=config.TRAIN.LAMBDA, log_wandb=config.TRAIN.WANDB)
+        criterion = CLIPMatSIM(
+            clip_loss,
+            S["S_mat"],
+            lambda_=config.TRAIN.LAMBDA,
+            log_wandb=config.TRAIN.WANDB,
+        )
 
     elif loss_type == "Text":
         criterion = TextLoss(
@@ -130,7 +164,7 @@ def build_criterion(config: Config, S: Dict = None, device: str = "cpu"):
             tau_cat=config.TRAIN.TAU_CAT,
             tau_mat=config.TRAIN.TAU_MAT,
             gamma=config.TRAIN.GAMMA,
-            log_wandb=config.TRAIN.WANDB
+            log_wandb=config.TRAIN.WANDB,
         )
     else:
         raise NotImplementedError(f"Loss {loss_type} is not implemented.")
@@ -204,18 +238,21 @@ def build_dataset(
 
 
 def build_categories(
-    caption_paths: List[str], key_: str = "material", model_name: str = "all-mpnet-base-v2", device="cpu"
+    caption_paths: List[str],
+    key_: str = "material",
+    model_name: str = "all-mpnet-base-v2",
+    device="cpu",
 ):
     if model_name != "all-mpnet-base-v2":
         raise NotImplementedError(
             f"Model {model_name} is not supported for builing embeddings."
         )
 
-    # from sentence_transformers import SentenceTransformer
+    from sentence_transformers import SentenceTransformer
 
-    # model = SentenceTransformer(
-    #     "sentence-transformers/all-mpnet-base-v2", device=device
-    # )
+    model = SentenceTransformer(
+        "sentence-transformers/all-mpnet-base-v2", device=device
+    )
 
     all_categories = set()
     for path in caption_paths:
@@ -229,19 +266,17 @@ def build_categories(
     unique_categories = sorted(list(all_categories))
     if "棉" in unique_categories:
         unique_categories.remove("棉")
-    if '泥土' in unique_categories:
+    if "泥土" in unique_categories:
         unique_categories.remove("泥土")
 
-    # embeddings = model.encode(unique_categories)
-    # normalized_embeddings = torch.nn.functional.normalize(
-    #     torch.tensor(embeddings), dim=1
-    # )
-    # S = normalized_embeddings @ normalized_embeddings.T
-    S = torch.ones((len(unique_categories), len(unique_categories)))
-    S = S.to(device)
+    embeddings = model.encode(unique_categories)
+    normalized_embeddings = torch.nn.functional.normalize(
+        torch.tensor(embeddings), dim=1
+    )
+    S = normalized_embeddings @ normalized_embeddings.T
 
-    # del model
-    # del embeddings
-    # del normalized_embeddings
+    del model
+    del embeddings
+    del normalized_embeddings
 
     return S, {item: idx for idx, item in enumerate(unique_categories)}

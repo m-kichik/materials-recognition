@@ -287,6 +287,7 @@ class TextLoss:
         tau_cat: float = 0.5,  # temperature for categories similarity
         tau_mat: float = 0.5,  # temperature for materials similarity
         gamma: float = 0.1,  # balance between MSE and SupCon
+        momentum: float = 0.9, # for EMA tracking of losses
         log_wandb: bool = False,
     ):
         self.S_cat = S.get("S_cat")
@@ -298,13 +299,19 @@ class TextLoss:
         self.alpha = alpha
         self.beta = beta
         self.tau = tau
-        self.th_cat = tau_cat
-        self.th_mat = tau_mat
+        self.tau_cat = tau_cat
+        self.tau_mat = tau_mat
         self.gamma = gamma
+        self.momentum = momentum
+
+        # Initialize EMA for mse and supcon
+        self.mse_ema = None
+        self.supcon_ema = None
+        self.eps = 1e-6
 
         self.log_wandb = log_wandb
 
-    def mse_multilabel_loss(self, embeddings, T_cat, T_mat, alpha=1.0, beta=1.0):
+    def mse_multilabel_loss(self, embeddings, T_cat, T_mat):
         sim = embeddings @ embeddings.t()
         loss_cat = F.mse_loss(sim, T_cat)
         loss_mat = F.mse_loss(sim, T_mat)
@@ -312,28 +319,34 @@ class TextLoss:
         if self.log_wandb and wandb.run is not None:
             wandb.log(
                 {
-                    "train/cat_mse": loss_cat.item(),
-                    "train/mat_mse": loss_mat.item(),
+                    "train_text/cat_mse": loss_cat.item(),
+                    "train_text/mat_mse": loss_mat.item(),
                 },
                 commit=False,
             )
 
-        return alpha * loss_cat + beta * loss_mat
+        return self.alpha * loss_cat + self.beta * loss_mat
 
     def supcon_multilabel(
-        self, embeddings, T_cat, T_mat, tau=0.1, th_cat=0.5, th_mat=0.5
+        self, embeddings, T_cat, T_mat
     ):
         B = embeddings.size(0)
-        sim = embeddings @ embeddings.t() / tau
+        sim = embeddings @ embeddings.t() / self.tau
         mask_self = torch.eye(B, device=embeddings.device).bool()
-        sim = sim.masked_fill(mask_self, -1e9)
+        pos_mask = ((T_cat >= self.tau_cat) | (T_mat >= self.tau_mat)) & ~mask_self
+        
+        sim_masked = sim.masked_fill(mask_self, float('-inf'))
+        denom_log = torch.logsumexp(sim_masked / self.tau, dim=1)
 
-        pos_mask = ((T_cat >= th_cat) | (T_mat >= th_mat)) & ~mask_self
-        exp_sim = sim.exp()
-        denom = exp_sim.sum(dim=1, keepdim=True)
+        sim_pos = sim_masked.masked_fill(~pos_mask, float('-inf'))
+        num_log = torch.logsumexp(sim_pos / self.tau, dim=1)
+    
+        pos_count = pos_mask.sum(dim=1)
+        pos_count_clamped = pos_count.clamp_min(1)
 
-        pos_sum = (exp_sim * pos_mask.float()).sum(dim=1).clamp_min(1.0)
-        loss = -(pos_sum.log() - denom.log().squeeze(1)) / pos_sum
+        num_log = torch.where(pos_count > 0, num_log, torch.zeros_like(num_log))
+    
+        loss = - (num_log - denom_log) / pos_count_clamped
         return loss.mean()
 
     def __call__(self, text_features, categories_matrix, materials_matrix, **kwargs):
@@ -346,28 +359,37 @@ class TextLoss:
         ).clamp_min(1)
         T_mat = raw_mat / denom
 
-        mse = self.mse_multilabel_loss(
-            text_features, T_cat, T_mat, alpha=self.alpha, beta=self.beta
+        mse_loss = self.mse_multilabel_loss(
+            text_features, T_cat, T_mat
         )
-        supcon = self.supcon_multilabel(
+        supcon_loss = self.supcon_multilabel(
             text_features,
             T_cat,
             T_mat,
-            tau=self.tau,
-            th_cat=self.th_cat,
-            th_mat=self.th_mat,
         )
 
-        loss = mse + self.gamma * supcon
+        # Initialize or update EMAs
+        if self.mse_ema is None:
+            self.mse_ema = mse_loss.item()
+            self.supcon_ema = supcon_loss.item()
+        else:
+            self.mse_ema = self.momentum * self.mse_ema + (1 - self.momentum) * mse_loss.item()
+            self.supcon_ema = self.momentum * self.supcon_ema + (1 - self.momentum) * supcon_loss.item()
 
-        print(mse.item(), supcon.item())
+        # Dynamic gamma: balance to match EMA scales
+        dynamic_gamma = (self.mse_ema + self.eps) / (self.supcon_ema + self.eps)
+
+        loss = mse_loss + dynamic_gamma * supcon_loss
 
         if self.log_wandb and wandb.run is not None:
             wandb.log(
                 {
-                    "train/mse": mse.item(),
-                    "train/supcon": supcon.item(),
-                    "train/loss": loss.item(),
+                    "train_text/mse": mse_loss.item(),
+                    "train_text/supcon": supcon_loss.item(),
+                    "train_text/ema_mse": self.mse_ema,
+                    "train_text/ema_supcon": self.supcon_ema,
+                    "train_text/dynamic_gamma": dynamic_gamma,
+                    "train_text/total_loss": loss.item(),
                 },
                 commit=False,
             )
