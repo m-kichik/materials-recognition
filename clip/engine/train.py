@@ -474,7 +474,7 @@ def train_fusion_iterations(
         optimizer.zero_grad()
 
 
-def train_iterations_text(
+def train_iterations_embeds(
     model: torch.nn.Module,
     criterion: Callable[[torch.tensor, torch.tensor], Tuple[torch.tensor]],
     optimizer: torch.optim.Optimizer,

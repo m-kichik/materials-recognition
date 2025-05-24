@@ -277,7 +277,7 @@ class CLIPMatSIM(torch.nn.Module):
         return loss
 
 
-class TextLoss:
+class EmbeddingsLoss:
     def __init__(
         self,
         S: Dict[str, torch.Tensor],
@@ -287,7 +287,8 @@ class TextLoss:
         tau_cat: float = 0.5,  # temperature for categories similarity
         tau_mat: float = 0.5,  # temperature for materials similarity
         gamma: float = 0.1,  # balance between MSE and SupCon
-        momentum: float = 0.9, # for EMA tracking of losses
+        momentum: float = 0.9, # for EMA tracking of losses,
+        mode: str = "",
         log_wandb: bool = False,
     ):
         self.S_cat = S.get("S_cat")
@@ -309,6 +310,7 @@ class TextLoss:
         self.supcon_ema = None
         self.eps = 1e-6
 
+        self.mode = mode
         self.log_wandb = log_wandb
 
     def mse_multilabel_loss(self, embeddings, T_cat, T_mat):
@@ -319,8 +321,8 @@ class TextLoss:
         if self.log_wandb and wandb.run is not None:
             wandb.log(
                 {
-                    "train_embeddings/cat_mse": loss_cat.item(),
-                    "train_embeddings/mat_mse": loss_mat.item(),
+                    f"train_embeddings/{self.mode}_cat_mse": loss_cat.item(),
+                    f"train_embeddings/{self.mode}_mat_mse": loss_mat.item(),
                 },
                 commit=False,
             )
@@ -384,12 +386,61 @@ class TextLoss:
         if self.log_wandb and wandb.run is not None:
             wandb.log(
                 {
-                    "train_embeddings/mse": mse_loss.item(),
-                    "train_embeddings/supcon": supcon_loss.item(),
-                    "train_embeddings/ema_mse": self.mse_ema,
-                    "train_embeddings/ema_supcon": self.supcon_ema,
-                    "train_embeddings/dynamic_gamma": dynamic_gamma,
-                    "train_embeddings/total_loss": loss.item(),
+                    f"train_embeddings/{self.mode}_mse": mse_loss.item(),
+                    f"train_embeddings/{self.mode}_supcon": supcon_loss.item(),
+                    f"train_embeddings/{self.mode}_ema_mse": self.mse_ema,
+                    f"train_embeddings/{self.mode}_ema_supcon": self.supcon_ema,
+                    f"train_embeddings/{self.mode}_dynamic_gamma": dynamic_gamma,
+                    f"train_embeddings/{self.mode}_embeds_loss": loss.item(),
+                },
+                commit=False,
+            )
+
+        return loss
+
+  
+class CombinedLoss(torch.nn.Module):
+    def __init__(
+        self,
+        clip_loss,
+        image_embeds_loss,
+        text_embeds_loss,
+        log_wandb: bool = False,
+    ):
+        super().__init__()
+        self.clip_loss = clip_loss
+        self.image_embeds_loss = image_embeds_loss
+        self.text_embeds_loss = text_embeds_loss
+
+        # Initialize EMA for mse and supcon
+        self.clip_ema = None
+        self.embeds_ema = None
+        self.eps = 1e-6
+
+    def forward(self, image_features, text_features, categories_matrix, materials_matrix, **kwargs):
+        clip_loss = self.clip_loss(image_features, text_features, **kwargs)
+
+        image_embeds_loss = self.image_embeds_loss(image_features, categories_matrix, materials_matrix, **kwargs)
+        text_embeds_loss = self.text_embeds_loss(text_features, categories_matrix, materials_matrix, **kwargs)
+        embeds_loss = (image_embeds_loss + text_embeds_loss) / 2
+
+        if self.clip_ema is None:
+            self.clip_ema = clip_loss.item()
+            self.embeds_ema = embeds_loss.item()
+        else:
+            self.clip_ema = self.momentum * self.clip_ema + (1 - self.momentum) * clip_loss.item()
+            self.embeds_ema = self.momentum * self.embeds_ema + (1 - self.momentum) * embeds_loss.item()
+
+        # Dynamic gamma: balance to match EMA scales
+        dynamic_gamma = (self.clip_ema + self.eps) / (self.embeds_ema + self.eps)
+
+        loss = clip_loss + dynamic_gamma * embeds_loss
+
+        if self.log_wandb and wandb.run is not None:
+            wandb.log(
+                {
+                    "train/combined_dynamic_gamma": dynamic_gamma,
+                    "train/loss": loss.item(),
                 },
                 commit=False,
             )

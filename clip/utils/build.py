@@ -12,7 +12,8 @@ from engine.criterion import (
     ReCLIPLoss,
     SigLIPLoss,
     CLIPMatSIM,
-    TextLoss,
+    EmbeddingsLoss,
+    CombinedLoss
 )
 from modelling import CLIP, LFCLIP, MLPCLIP
 
@@ -156,7 +157,7 @@ def build_criterion(config: Config, S: Dict = None, device: str = "cpu"):
         )
 
     elif loss_type == "Embeddings":
-        criterion = TextLoss(
+        criterion = EmbeddingsLoss(
             S=S,
             alpha=config.TRAIN.ALPHA,
             beta=config.TRAIN.BETA,
@@ -164,6 +165,38 @@ def build_criterion(config: Config, S: Dict = None, device: str = "cpu"):
             tau_cat=config.TRAIN.TAU_CAT,
             tau_mat=config.TRAIN.TAU_MAT,
             gamma=config.TRAIN.GAMMA,
+            log_wandb=config.TRAIN.WANDB,
+        )
+    
+    elif loss_type == "Combined":
+        t = config.TRAIN.TEMPERATURE
+        clip_loss = CLIPLoss(t, log_wandb=config.TRAIN.WANDB)
+        image_embeds_loss = EmbeddingsLoss(
+            S=S,
+            alpha=config.TRAIN.ALPHA,
+            beta=config.TRAIN.BETA,
+            tau=config.TRAIN.TAU,
+            tau_cat=config.TRAIN.TAU_CAT,
+            tau_mat=config.TRAIN.TAU_MAT,
+            gamma=config.TRAIN.GAMMA,
+            mode="image",
+            log_wandb=config.TRAIN.WANDB,
+        )
+        text_embeds_loss = EmbeddingsLoss(
+            S=S,
+            alpha=config.TRAIN.ALPHA,
+            beta=config.TRAIN.BETA,
+            tau=config.TRAIN.TAU,
+            tau_cat=config.TRAIN.TAU_CAT,
+            tau_mat=config.TRAIN.TAU_MAT,
+            gamma=config.TRAIN.GAMMA,
+            mode="text",
+            log_wandb=config.TRAIN.WANDB,
+        )
+        criterion = CombinedLoss(
+            clip_loss=clip_loss,
+            image_embeds_loss=image_embeds_loss,
+            text_embeds_loss=text_embeds_loss,
             log_wandb=config.TRAIN.WANDB,
         )
     else:
