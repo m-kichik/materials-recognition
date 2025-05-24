@@ -75,7 +75,7 @@ def build_model(config: Config, device: str = "cpu"):
     if pretrained is None:
         pretrained = False
 
-    if model_type in ["vanilla_clip", "vanilla_clip_text", "clip", "siglip"]:
+    if model_type in ["vanilla_clip", "vanilla_clip_text", "vanilla_clip_imgs", "clip", "siglip"]:
         if pretrained:
             model = CLIP(clip_model_name, device=device)
             preprocess = model.preprocess
@@ -155,7 +155,7 @@ def build_criterion(config: Config, S: Dict = None, device: str = "cpu"):
             log_wandb=config.TRAIN.WANDB,
         )
 
-    elif loss_type == "Text":
+    elif loss_type == "Embeddings":
         criterion = TextLoss(
             S=S,
             alpha=config.TRAIN.ALPHA,
@@ -188,7 +188,10 @@ def build_optimizer(
     elif model_type == "vanilla_clip_text":
         param_groups.append({"params": model.clip.text_model.parameters()})
         param_groups.append({"params": model.clip.text_projection.parameters()})
-        param_groups.append({"params": model.clip.logit_scale})
+
+    elif model_type == "vanilla_clip_imgs":
+        param_groups.append({"params": model.clip.vision_model.parameters()})
+        param_groups.append({"params": model.clip.visual_projection.parameters()})
 
     elif model_type == "late_fusion_clip":
         if not config.MODEL.FREEZE_CLIP:
@@ -232,6 +235,7 @@ def build_dataset(
         materials=materials_dict,
         embeddings_dir=config.EMBEDDINGS_PATH,
         preprocess=preprocess,
+        augmentations=config.AUGMENTATIONS,
     )
 
     return dataset

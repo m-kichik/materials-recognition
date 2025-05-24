@@ -319,8 +319,8 @@ class TextLoss:
         if self.log_wandb and wandb.run is not None:
             wandb.log(
                 {
-                    "train_text/cat_mse": loss_cat.item(),
-                    "train_text/mat_mse": loss_mat.item(),
+                    "train_embeddings/cat_mse": loss_cat.item(),
+                    "train_embeddings/mat_mse": loss_mat.item(),
                 },
                 commit=False,
             )
@@ -384,12 +384,12 @@ class TextLoss:
         if self.log_wandb and wandb.run is not None:
             wandb.log(
                 {
-                    "train_text/mse": mse_loss.item(),
-                    "train_text/supcon": supcon_loss.item(),
-                    "train_text/ema_mse": self.mse_ema,
-                    "train_text/ema_supcon": self.supcon_ema,
-                    "train_text/dynamic_gamma": dynamic_gamma,
-                    "train_text/total_loss": loss.item(),
+                    "train_embeddings/mse": mse_loss.item(),
+                    "train_embeddings/supcon": supcon_loss.item(),
+                    "train_embeddings/ema_mse": self.mse_ema,
+                    "train_embeddings/ema_supcon": self.supcon_ema,
+                    "train_embeddings/dynamic_gamma": dynamic_gamma,
+                    "train_embeddings/total_loss": loss.item(),
                 },
                 commit=False,
             )

@@ -485,6 +485,7 @@ def train_iterations_text(
     warmup_fraction: float = 0.1,
     eval_interval: int = 5,
     accumulation_steps: int = 1,
+    mode:str = "captions",
     device: str = "cpu",
     model_name: str = "",
     freeze_text: bool = False,
@@ -517,12 +518,15 @@ def train_iterations_text(
                 k: v.to(device) if isinstance(v, torch.Tensor) else v
                 for k, v in batch.items()
             }
-            if len(batch["captions"]) == 2:
-                batch["captions"] = random.choice(batch["captions"])
+                
+            if mode == "captions":
+                captions = batch["captions"]
+                features = model.encode_text(captions).cpu()
+            elif mode == "images":
+                images = batch["images"]
+                features = model.encode_image(images)
 
-            text_features = model.encode_text(batch["captions"])
-
-            loss = criterion(text_features, **batch)
+            loss = criterion(features, **batch)
             loss = loss / accumulation_steps
 
             loss.backward()
@@ -540,7 +544,7 @@ def train_iterations_text(
             if wandb.run is not None:
                 wandb.log(
                     {
-                        "train_text/lr": current_lr,
+                        "train_embeddings/lr": current_lr,
                     }
                 )
 
@@ -553,6 +557,7 @@ def train_iterations_text(
                 eval_loader,
                 S_cat=criterion.S_cat.cpu().numpy(),
                 S_mat=criterion.S_mat.cpu().numpy(),
+                mode=mode,
                 device=device,
             )
 
@@ -582,7 +587,7 @@ def train_iterations_text(
             print(log_msg)
 
             if wandb.run is not None:
-                eval_metrics = {"eval_text/" + k: v for k, v in eval_metrics.items()}
+                eval_metrics = {"eval_embeddings/" + k: v for k, v in eval_metrics.items()}
                 wandb.log(eval_metrics)
 
     if (n_iterations % accumulation_steps) != 0:
