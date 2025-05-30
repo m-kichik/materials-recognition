@@ -32,9 +32,7 @@ class MLPCLIP(nn.Module):
         images = self.processor(images=[images], return_tensors="pt", padding=True)
         return images["pixel_values"].squeeze()
 
-    def encode_image(
-        self, images: torch.tensor
-    ):
+    def encode_image(self, images: torch.tensor):
         return self.clip.get_image_features(pixel_values=images)
 
     def encode_text(self, captions: List[str]):
@@ -42,7 +40,7 @@ class MLPCLIP(nn.Module):
         text_inputs = {k: v.to(self.device) for k, v in text_inputs.items()}
 
         return self.clip.get_text_features(**text_inputs)
-    
+
     def classify(self, images_embeddings):
         """
         Classify the images using the MLP.

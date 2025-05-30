@@ -22,20 +22,20 @@ class CLIP(nn.Module):
             self.processor = CLIPProcessor.from_pretrained(clip_model_name)
         elif clip_model_name.startswith("google/siglip"):
             self.clip = AutoModel.from_pretrained(
-                clip_model_name, 
+                clip_model_name,
                 device_map=device,
-                )
+            )
             self.processor = AutoProcessor.from_pretrained(clip_model_name)
         else:
-            raise NotImplementedError(f"Support for {clip_model_name} is not implemented.")
+            raise NotImplementedError(
+                f"Support for {clip_model_name} is not implemented."
+            )
 
     def preprocess(self, images):
         images = self.processor(images=[images], return_tensors="pt", padding=True)
         return images["pixel_values"].squeeze()
 
-    def encode_image(
-        self, images: torch.tensor
-    ):
+    def encode_image(self, images: torch.tensor):
         return self.clip.get_image_features(pixel_values=images)
 
     def encode_text(self, captions: List[str]):

@@ -15,7 +15,7 @@ from engine.criterion import (
     EmbeddingsLoss,
     CombinedLoss
 )
-from modelling import CLIP, LFCLIP, MLPCLIP
+from modelling import CLIP, LFCLIP, MLPCLIP, TextEncoder
 
 
 def build_experiment(
@@ -102,6 +102,12 @@ def build_model(config: Config, device: str = "cpu"):
         )
 
         preprocess = model.preprocess
+    elif model_type == "text":
+        preprocess = None
+        model = TextEncoder(
+            model_name=config.MODEL.BACKBONE,
+            device=device
+        )
     else:
         raise NotImplementedError(f"Model {model_type} is not implemented.")
 

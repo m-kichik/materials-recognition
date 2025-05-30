@@ -11,9 +11,9 @@ import wandb
 
 class ConcatFusion(nn.Module):
     def __init__(
-            self,
-            out_size: int = 512,
-            device: str = "cpu",
+        self,
+        out_size: int = 512,
+        device: str = "cpu",
     ):
         super().__init__()
 
@@ -32,7 +32,9 @@ class ConcatFusion(nn.Module):
     def forward(self, clip_features: torch.tensor, context_embeddings: torch.tensor):
         context_features = self.context_proj(context_embeddings.to(self.device))
 
-        fused_embeddings = self.mlp(torch.cat([clip_features, context_features], dim=-1))
+        fused_embeddings = self.mlp(
+            torch.cat([clip_features, context_features], dim=-1)
+        )
 
         return fused_embeddings
 
@@ -73,9 +75,7 @@ class MHAFusion(nn.Module):
         context_features = self.context_proj(context_embeddings.to(self.device))
 
         attn_output, attn_weights = self.fusion_attn(
-            clip_features,
-            context_features,
-            context_features
+            clip_features, context_features, context_features
         )
 
         fused = attn_output.squeeze(1)
@@ -90,8 +90,8 @@ class LFCLIP(nn.Module):
     def __init__(
         self,
         clip_model_name: str = "openai/clip-vit-base-patch32",
-        freeze_clip:bool = False,
-        clip_ckpt:str = "",
+        freeze_clip: bool = False,
+        clip_ckpt: str = "",
         fusion_type: str = "concat",
         num_heads: int = 8,
         mode: str = "train",
@@ -112,7 +112,7 @@ class LFCLIP(nn.Module):
         self.mode = mode
         if mode == "inference":
             raise NotImplementedError("Ping author to implement fair pipeline.")
-        
+
         if fusion_type == "concat":
             self.fusion = ConcatFusion(out_size=512, device=device)
         elif fusion_type == "mha":
@@ -124,9 +124,7 @@ class LFCLIP(nn.Module):
         images = self.processor(images=[images], return_tensors="pt", padding=True)
         return images["pixel_values"].squeeze()
 
-    def encode_image(
-        self, images: torch.tensor, embeddings: torch.tensor, **kwargs
-    ):
+    def encode_image(self, images: torch.tensor, embeddings: torch.tensor, **kwargs):
         if self.freeze_clip:
             with torch.no_grad():
                 clip_features = self.clip.get_image_features(pixel_values=images)
@@ -142,10 +140,14 @@ class LFCLIP(nn.Module):
     def encode_text(self, captions: List[str], **kwargs):
         if self.freeze_clip:
             with torch.no_grad():
-                text_inputs = self.processor(text=captions, return_tensors="pt", padding=True)
+                text_inputs = self.processor(
+                    text=captions, return_tensors="pt", padding=True
+                )
                 text_inputs = {k: v.to(self.device) for k, v in text_inputs.items()}
         else:
-            text_inputs = self.processor(text=captions, return_tensors="pt", padding=True)
+            text_inputs = self.processor(
+                text=captions, return_tensors="pt", padding=True
+            )
             text_inputs = {k: v.to(self.device) for k, v in text_inputs.items()}
 
         return self.clip.get_text_features(**text_inputs)
