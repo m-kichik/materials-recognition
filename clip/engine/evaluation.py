@@ -262,30 +262,30 @@ def evaluate_intrinsic(
     cat_targets = T_cat[idx_i, idx_j]
     mat_targets = T_mat[idx_i, idx_j]
 
-    metrics["pearson_cat"] = pearsonr(cos_sims, cat_targets)[0]
+    # metrics["pearson_cat"] = pearsonr(cos_sims, cat_targets)[0]
     metrics["pearson_mat"] = pearsonr(cos_sims, mat_targets)[0]
     log_msg("evaluation: calculated pearson........")
 
     # Clustering metrics
     # Category clustering
-    labels_cat = C.argmax(axis=1)
-    k_cat = len(np.unique(labels_cat))
-    kmc = KMeans(n_clusters=k_cat, random_state=0).fit(embeddings)
-    metrics["silhouette_cat"] = silhouette_score(embeddings, labels_cat)
-    metrics["ari_cat"] = adjusted_rand_score(labels_cat, kmc.labels_)
-    log_msg("evaluation: calculated category clustering.......")
+    # labels_cat = C.argmax(axis=1)
+    # k_cat = len(np.unique(labels_cat))
+    # kmc = KMeans(n_clusters=k_cat, random_state=0).fit(embeddings)
+    # metrics["silhouette_cat"] = silhouette_score(embeddings, labels_cat)
+    # metrics["ari_cat"] = adjusted_rand_score(labels_cat, kmc.labels_)
+    # log_msg("evaluation: calculated category clustering.......")
 
-    # Material clustering: sample top 50 frequent materials
-    mat_counts = M.sum(axis=0)
-    top_mat = np.argsort(-mat_counts)[:50]
-    mask = M[:, top_mat].sum(axis=1) > 0
-    emb_sub = embeddings[mask]
-    labels_mat_sub = M[mask][:, top_mat].argmax(axis=1)
-    k_mat = len(np.unique(labels_mat_sub))
-    kmm = KMeans(n_clusters=k_mat, random_state=0).fit(emb_sub)
-    metrics["silhouette_mat"] = silhouette_score(emb_sub, labels_mat_sub)
-    metrics["ari_mat"] = adjusted_rand_score(labels_mat_sub, kmm.labels_)
-    log_msg("evaluation: calculated materials clustering......")
+    # # Material clustering: sample top 50 frequent materials
+    # mat_counts = M.sum(axis=0)
+    # top_mat = np.argsort(-mat_counts)[:50]
+    # mask = M[:, top_mat].sum(axis=1) > 0
+    # emb_sub = embeddings[mask]
+    # labels_mat_sub = M[mask][:, top_mat].argmax(axis=1)
+    # k_mat = len(np.unique(labels_mat_sub))
+    # kmm = KMeans(n_clusters=k_mat, random_state=0).fit(emb_sub)
+    # metrics["silhouette_mat"] = silhouette_score(emb_sub, labels_mat_sub)
+    # metrics["ari_mat"] = adjusted_rand_score(labels_mat_sub, kmm.labels_)
+    # log_msg("evaluation: calculated materials clustering......")
 
     return metrics
 
@@ -350,11 +350,11 @@ def evaluate_extrinsic(
     ap_cats = []
     ap_mats = []
     for i in range(sim.shape[0]):
-        true_cat = (y_cat_tr == y_cat_te[i]).astype(int)
-        ap_cats.append(average_precision_score(true_cat, sim[i]))
+        # true_cat = (y_cat_tr == y_cat_te[i]).astype(int)
+        # ap_cats.append(average_precision_score(true_cat, sim[i]))
         true_mat = (y_mat_tr == y_mat_te[i]).astype(int)
         ap_mats.append(average_precision_score(true_mat, sim[i]))
-    metrics["map_cat"] = np.mean(ap_cats)
+    # metrics["map_cat"] = np.mean(ap_cats)
     metrics["map_mat"] = np.mean(ap_mats)
     log_msg("evaluation: calculated map...")
 
@@ -387,12 +387,13 @@ def evaluate_embeddings(
 
         if mode == "captions":
             captions = batch["captions"]
-            text_features = model.encode_text(captions).cpu()
+            text_features = model.encode_text(captions, **batch).cpu()
             text_features = F.normalize(text_features, dim=-1)
             all_embeddings.append(text_features.cpu())
         elif mode == "images":
             images = batch["images"]
-            image_features = model.encode_image(images)
+            image_features = model.encode_image(**batch)
+            # image_features = model.encode_image(images, **batch)
             image_features = F.normalize(image_features, dim=-1)
             all_embeddings.append(image_features.cpu())
         all_C.append(batch["categories_matrix"].cpu())

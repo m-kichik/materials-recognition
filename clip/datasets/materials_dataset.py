@@ -117,6 +117,8 @@ class MaterialsDataset(Dataset):
         else:
             self.augmentations = augmentations
 
+        print(self.augmentations)
+
     def __len__(self) -> int:
         return len(self.data)
 

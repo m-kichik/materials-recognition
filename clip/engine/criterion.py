@@ -288,6 +288,7 @@ class EmbeddingsLoss:
         tau_mat: float = 0.5,  # temperature for materials similarity
         gamma: float = 0.1,  # balance between MSE and SupCon
         momentum: float = 0.9, # for EMA tracking of losses,
+        use_mse: bool = False,
         mode: str = "",
         log_wandb: bool = False,
     ):
@@ -305,6 +306,7 @@ class EmbeddingsLoss:
         self.gamma = gamma
         self.momentum = momentum
 
+        self.use_mse = use_mse
         # Initialize EMA for mse and supcon
         self.mse_ema = None
         self.supcon_ema = None
@@ -361,36 +363,48 @@ class EmbeddingsLoss:
         ).clamp_min(1)
         T_mat = raw_mat / denom
 
-        mse_loss = self.mse_multilabel_loss(
-            text_features, T_cat, T_mat
-        )
+        if self.use_mse:
+            mse_loss = self.mse_multilabel_loss(
+                text_features, T_cat, T_mat
+            )
+
         supcon_loss = self.supcon_multilabel(
             text_features,
             T_cat,
             T_mat,
         )
-
+        
         # Initialize or update EMAs
-        if self.mse_ema is None:
-            self.mse_ema = mse_loss.item()
-            self.supcon_ema = supcon_loss.item()
+        if self.use_mse:
+            if self.mse_ema is None:
+                self.mse_ema = mse_loss.item()
+                self.supcon_ema = supcon_loss.item()
+            else:
+                self.mse_ema = self.momentum * self.mse_ema + (1 - self.momentum) * mse_loss.item()
+                self.supcon_ema = self.momentum * self.supcon_ema + (1 - self.momentum) * supcon_loss.item()
+    
+            # Dynamic gamma: balance to match EMA scales
+            dynamic_gamma = (self.mse_ema + self.eps) / (self.supcon_ema + self.eps)
+    
+            loss = mse_loss + dynamic_gamma * supcon_loss
+            
+            if self.log_wandb and wandb.run is not None:
+                wandb.log(
+                    {
+                        f"train_embeddings/{self.mode}_mse": mse_loss.item(),
+                        f"train_embeddings/{self.mode}_ema_mse": self.mse_ema,
+                        f"train_embeddings/{self.mode}_ema_supcon": self.supcon_ema,
+                        f"train_embeddings/{self.mode}_dynamic_gamma": dynamic_gamma,
+                    },
+                    commit=False,
+                )
         else:
-            self.mse_ema = self.momentum * self.mse_ema + (1 - self.momentum) * mse_loss.item()
-            self.supcon_ema = self.momentum * self.supcon_ema + (1 - self.momentum) * supcon_loss.item()
-
-        # Dynamic gamma: balance to match EMA scales
-        dynamic_gamma = (self.mse_ema + self.eps) / (self.supcon_ema + self.eps)
-
-        loss = mse_loss + dynamic_gamma * supcon_loss
+            loss = supcon_loss
 
         if self.log_wandb and wandb.run is not None:
             wandb.log(
                 {
-                    f"train_embeddings/{self.mode}_mse": mse_loss.item(),
                     f"train_embeddings/{self.mode}_supcon": supcon_loss.item(),
-                    f"train_embeddings/{self.mode}_ema_mse": self.mse_ema,
-                    f"train_embeddings/{self.mode}_ema_supcon": self.supcon_ema,
-                    f"train_embeddings/{self.mode}_dynamic_gamma": dynamic_gamma,
                     f"train_embeddings/{self.mode}_embeds_loss": loss.item(),
                 },
                 commit=False,
@@ -405,6 +419,7 @@ class CombinedLoss(torch.nn.Module):
         clip_loss,
         image_embeds_loss,
         text_embeds_loss,
+        momentum: float = 0.9,
         log_wandb: bool = False,
     ):
         super().__init__()
@@ -412,17 +427,30 @@ class CombinedLoss(torch.nn.Module):
         self.image_embeds_loss = image_embeds_loss
         self.text_embeds_loss = text_embeds_loss
 
-        # Initialize EMA for mse and supcon
+        # Initialize EMA for clip loss and embeddings loss
+        self.use_ema = True
+        self.momentum = momentum
         self.clip_ema = None
         self.embeds_ema = None
         self.eps = 1e-6
 
+        self.log_wandb = log_wandb
+
     def forward(self, image_features, text_features, categories_matrix, materials_matrix, **kwargs):
         clip_loss = self.clip_loss(image_features, text_features, **kwargs)
 
-        image_embeds_loss = self.image_embeds_loss(image_features, categories_matrix, materials_matrix, **kwargs)
-        text_embeds_loss = self.text_embeds_loss(text_features, categories_matrix, materials_matrix, **kwargs)
-        embeds_loss = (image_embeds_loss + text_embeds_loss) / 2
+        if self.image_embeds_loss is not None:
+            image_embeds_loss = self.image_embeds_loss(image_features, categories_matrix, materials_matrix, **kwargs)
+        else:
+            image_embeds_loss = 0
+        if self.text_embeds_loss is not None:
+            text_embeds_loss = self.text_embeds_loss(text_features, categories_matrix, materials_matrix, **kwargs)
+            # embeds_loss = (image_embeds_loss + text_embeds_loss) / 2
+        else:
+            # embeds_loss = image_embeds_loss
+            text_embeds_loss = 0
+        
+        embeds_loss = (image_embeds_loss + text_embeds_loss) / 2  
 
         if self.clip_ema is None:
             self.clip_ema = clip_loss.item()
@@ -433,6 +461,14 @@ class CombinedLoss(torch.nn.Module):
 
         # Dynamic gamma: balance to match EMA scales
         dynamic_gamma = (self.clip_ema + self.eps) / (self.embeds_ema + self.eps)
+
+        if self.embeds_ema < 1e-4:
+            self.use_ema = False
+        else:
+            self.use_ema = True
+            
+        if not self.use_ema:
+            dynamic_gamma = 1
 
         loss = clip_loss + dynamic_gamma * embeds_loss
 

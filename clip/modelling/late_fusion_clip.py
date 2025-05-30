@@ -125,7 +125,7 @@ class LFCLIP(nn.Module):
         return images["pixel_values"].squeeze()
 
     def encode_image(
-        self, images: torch.tensor, context_embeddings: torch.tensor
+        self, images: torch.tensor, embeddings: torch.tensor, **kwargs
     ):
         if self.freeze_clip:
             with torch.no_grad():
@@ -135,11 +135,11 @@ class LFCLIP(nn.Module):
 
         clip_features = F.normalize(clip_features, dim=-1)
 
-        fused_embeddings = self.fusion(clip_features, context_embeddings)
+        fused_embeddings = self.fusion(clip_features, embeddings)
 
         return fused_embeddings
 
-    def encode_text(self, captions: List[str]):
+    def encode_text(self, captions: List[str], **kwargs):
         if self.freeze_clip:
             with torch.no_grad():
                 text_inputs = self.processor(text=captions, return_tensors="pt", padding=True)

@@ -77,13 +77,8 @@ def build_model(config: Config, device: str = "cpu"):
         pretrained = False
 
     if model_type in ["vanilla_clip", "vanilla_clip_text", "vanilla_clip_imgs", "clip", "siglip"]:
-        if pretrained:
-            model = CLIP(clip_model_name, device=device)
-            preprocess = model.preprocess
-        else:
-            raise NotImplementedError(
-                "Zero CLIP model is not available. Please set `PRETRAINED` to True."
-            )
+        model = CLIP(clip_model_name, device=device)
+        preprocess = model.preprocess
     elif model_type == "late_fusion_clip":
         model = LFCLIP(
             clip_model_name=clip_model_name,
@@ -171,28 +166,40 @@ def build_criterion(config: Config, S: Dict = None, device: str = "cpu"):
     elif loss_type == "Combined":
         t = config.TRAIN.TEMPERATURE
         clip_loss = CLIPLoss(t, log_wandb=config.TRAIN.WANDB)
-        image_embeds_loss = EmbeddingsLoss(
-            S=S,
-            alpha=config.TRAIN.ALPHA,
-            beta=config.TRAIN.BETA,
-            tau=config.TRAIN.TAU,
-            tau_cat=config.TRAIN.TAU_CAT,
-            tau_mat=config.TRAIN.TAU_MAT,
-            gamma=config.TRAIN.GAMMA,
-            mode="image",
-            log_wandb=config.TRAIN.WANDB,
-        )
-        text_embeds_loss = EmbeddingsLoss(
-            S=S,
-            alpha=config.TRAIN.ALPHA,
-            beta=config.TRAIN.BETA,
-            tau=config.TRAIN.TAU,
-            tau_cat=config.TRAIN.TAU_CAT,
-            tau_mat=config.TRAIN.TAU_MAT,
-            gamma=config.TRAIN.GAMMA,
-            mode="text",
-            log_wandb=config.TRAIN.WANDB,
-        )
+        tune_img = False
+        tune_text = True
+        if tune_img:
+            image_embeds_loss = EmbeddingsLoss(
+                S=S,
+                alpha=config.TRAIN.ALPHA,
+                beta=config.TRAIN.BETA,
+                tau=config.TRAIN.TAU,
+                tau_cat=config.TRAIN.TAU_CAT,
+                tau_mat=config.TRAIN.TAU_MAT,
+                gamma=config.TRAIN.GAMMA,
+                mode="image",
+                log_wandb=config.TRAIN.WANDB,
+            )
+        else:
+            image_embeds_loss = None
+        if tune_text:
+            text_embeds_loss = EmbeddingsLoss(
+                S=S,
+                alpha=config.TRAIN.ALPHA,
+                beta=config.TRAIN.BETA,
+                tau=config.TRAIN.TAU,
+                tau_cat=config.TRAIN.TAU_CAT,
+                tau_mat=config.TRAIN.TAU_MAT,
+                gamma=config.TRAIN.GAMMA,
+                mode="text",
+                log_wandb=config.TRAIN.WANDB,
+            )
+        else:
+            text_embeds_loss = None
+
+        if text_embeds_loss is None and image_embeds_loss is None:
+            raise RuntimeError("Text loss or Image loss have to be not None.")
+            
         criterion = CombinedLoss(
             clip_loss=clip_loss,
             image_embeds_loss=image_embeds_loss,
