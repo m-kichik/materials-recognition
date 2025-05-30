@@ -485,7 +485,7 @@ def train_iterations_embeds(
     warmup_fraction: float = 0.1,
     eval_interval: int = 5,
     accumulation_steps: int = 1,
-    mode:str = "captions",
+    mode: str = "captions",
     device: str = "cpu",
     model_name: str = "",
     freeze_text: bool = False,
@@ -518,7 +518,7 @@ def train_iterations_embeds(
                 k: v.to(device) if isinstance(v, torch.Tensor) else v
                 for k, v in batch.items()
             }
-                
+
             if mode == "captions":
                 captions = batch["captions"]
                 features = model.encode_text(captions).cpu()
@@ -587,7 +587,9 @@ def train_iterations_embeds(
             print(log_msg)
 
             if wandb.run is not None:
-                eval_metrics = {"eval_embeddings/" + k: v for k, v in eval_metrics.items()}
+                eval_metrics = {
+                    "eval_embeddings/" + k: v for k, v in eval_metrics.items()
+                }
                 wandb.log(eval_metrics)
 
     if (n_iterations % accumulation_steps) != 0:

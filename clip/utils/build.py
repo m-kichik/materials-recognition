@@ -13,7 +13,7 @@ from engine.criterion import (
     SigLIPLoss,
     CLIPMatSIM,
     EmbeddingsLoss,
-    CombinedLoss
+    CombinedLoss,
 )
 from modelling import CLIP, LFCLIP, MLPCLIP, TextEncoder
 
@@ -76,7 +76,13 @@ def build_model(config: Config, device: str = "cpu"):
     if pretrained is None:
         pretrained = False
 
-    if model_type in ["vanilla_clip", "vanilla_clip_text", "vanilla_clip_imgs", "clip", "siglip"]:
+    if model_type in [
+        "vanilla_clip",
+        "vanilla_clip_text",
+        "vanilla_clip_imgs",
+        "clip",
+        "siglip",
+    ]:
         model = CLIP(clip_model_name, device=device)
         preprocess = model.preprocess
     elif model_type == "late_fusion_clip":
@@ -104,17 +110,13 @@ def build_model(config: Config, device: str = "cpu"):
         preprocess = model.preprocess
     elif model_type == "text":
         preprocess = None
-        model = TextEncoder(
-            model_name=config.MODEL.BACKBONE,
-            device=device
-        )
+        model = TextEncoder(model_name=config.MODEL.BACKBONE, device=device)
     else:
         raise NotImplementedError(f"Model {model_type} is not implemented.")
 
     if config.MODEL.PRETRAINED_CKPT is not None:
         model.load_state_dict(
-            torch.load(config.MODEL.PRETRAINED_CKPT, weights_only=True),
-            strict=False
+            torch.load(config.MODEL.PRETRAINED_CKPT, weights_only=True), strict=False
         )
 
     return model, preprocess
@@ -168,7 +170,7 @@ def build_criterion(config: Config, S: Dict = None, device: str = "cpu"):
             gamma=config.TRAIN.GAMMA,
             log_wandb=config.TRAIN.WANDB,
         )
-    
+
     elif loss_type == "Combined":
         t = config.TRAIN.TEMPERATURE
         clip_loss = CLIPLoss(t, log_wandb=config.TRAIN.WANDB)
@@ -205,7 +207,7 @@ def build_criterion(config: Config, S: Dict = None, device: str = "cpu"):
 
         if text_embeds_loss is None and image_embeds_loss is None:
             raise RuntimeError("Text loss or Image loss have to be not None.")
-            
+
         criterion = CombinedLoss(
             clip_loss=clip_loss,
             image_embeds_loss=image_embeds_loss,

@@ -287,7 +287,7 @@ class EmbeddingsLoss:
         tau_cat: float = 0.5,  # temperature for categories similarity
         tau_mat: float = 0.5,  # temperature for materials similarity
         gamma: float = 0.1,  # balance between MSE and SupCon
-        momentum: float = 0.9, # for EMA tracking of losses,
+        momentum: float = 0.9,  # for EMA tracking of losses,
         use_mse: bool = False,
         mode: str = "",
         log_wandb: bool = False,
@@ -331,26 +331,24 @@ class EmbeddingsLoss:
 
         return self.alpha * loss_cat + self.beta * loss_mat
 
-    def supcon_multilabel(
-        self, embeddings, T_cat, T_mat
-    ):
+    def supcon_multilabel(self, embeddings, T_cat, T_mat):
         B = embeddings.size(0)
         sim = embeddings @ embeddings.t() / self.tau
         mask_self = torch.eye(B, device=embeddings.device).bool()
         pos_mask = ((T_cat >= self.tau_cat) | (T_mat >= self.tau_mat)) & ~mask_self
-        
-        sim_masked = sim.masked_fill(mask_self, float('-inf'))
+
+        sim_masked = sim.masked_fill(mask_self, float("-inf"))
         denom_log = torch.logsumexp(sim_masked / self.tau, dim=1)
 
-        sim_pos = sim_masked.masked_fill(~pos_mask, float('-inf'))
+        sim_pos = sim_masked.masked_fill(~pos_mask, float("-inf"))
         num_log = torch.logsumexp(sim_pos / self.tau, dim=1)
-    
+
         pos_count = pos_mask.sum(dim=1)
         pos_count_clamped = pos_count.clamp_min(1)
 
         num_log = torch.where(pos_count > 0, num_log, torch.zeros_like(num_log))
-    
-        loss = - (num_log - denom_log) / pos_count_clamped
+
+        loss = -(num_log - denom_log) / pos_count_clamped
         return loss.mean()
 
     def __call__(self, text_features, categories_matrix, materials_matrix, **kwargs):
@@ -364,30 +362,33 @@ class EmbeddingsLoss:
         T_mat = raw_mat / denom
 
         if self.use_mse:
-            mse_loss = self.mse_multilabel_loss(
-                text_features, T_cat, T_mat
-            )
+            mse_loss = self.mse_multilabel_loss(text_features, T_cat, T_mat)
 
         supcon_loss = self.supcon_multilabel(
             text_features,
             T_cat,
             T_mat,
         )
-        
+
         # Initialize or update EMAs
         if self.use_mse:
             if self.mse_ema is None:
                 self.mse_ema = mse_loss.item()
                 self.supcon_ema = supcon_loss.item()
             else:
-                self.mse_ema = self.momentum * self.mse_ema + (1 - self.momentum) * mse_loss.item()
-                self.supcon_ema = self.momentum * self.supcon_ema + (1 - self.momentum) * supcon_loss.item()
-    
+                self.mse_ema = (
+                    self.momentum * self.mse_ema + (1 - self.momentum) * mse_loss.item()
+                )
+                self.supcon_ema = (
+                    self.momentum * self.supcon_ema
+                    + (1 - self.momentum) * supcon_loss.item()
+                )
+
             # Dynamic gamma: balance to match EMA scales
             dynamic_gamma = (self.mse_ema + self.eps) / (self.supcon_ema + self.eps)
-    
+
             loss = mse_loss + dynamic_gamma * supcon_loss
-            
+
             if self.log_wandb and wandb.run is not None:
                 wandb.log(
                     {
@@ -412,7 +413,7 @@ class EmbeddingsLoss:
 
         return loss
 
-  
+
 class CombinedLoss(torch.nn.Module):
     def __init__(
         self,
@@ -436,28 +437,44 @@ class CombinedLoss(torch.nn.Module):
 
         self.log_wandb = log_wandb
 
-    def forward(self, image_features, text_features, categories_matrix, materials_matrix, **kwargs):
+    def forward(
+        self,
+        image_features,
+        text_features,
+        categories_matrix,
+        materials_matrix,
+        **kwargs,
+    ):
         clip_loss = self.clip_loss(image_features, text_features, **kwargs)
 
         if self.image_embeds_loss is not None:
-            image_embeds_loss = self.image_embeds_loss(image_features, categories_matrix, materials_matrix, **kwargs)
+            image_embeds_loss = self.image_embeds_loss(
+                image_features, categories_matrix, materials_matrix, **kwargs
+            )
         else:
             image_embeds_loss = 0
         if self.text_embeds_loss is not None:
-            text_embeds_loss = self.text_embeds_loss(text_features, categories_matrix, materials_matrix, **kwargs)
+            text_embeds_loss = self.text_embeds_loss(
+                text_features, categories_matrix, materials_matrix, **kwargs
+            )
             # embeds_loss = (image_embeds_loss + text_embeds_loss) / 2
         else:
             # embeds_loss = image_embeds_loss
             text_embeds_loss = 0
-        
-        embeds_loss = (image_embeds_loss + text_embeds_loss) / 2  
+
+        embeds_loss = (image_embeds_loss + text_embeds_loss) / 2
 
         if self.clip_ema is None:
             self.clip_ema = clip_loss.item()
             self.embeds_ema = embeds_loss.item()
         else:
-            self.clip_ema = self.momentum * self.clip_ema + (1 - self.momentum) * clip_loss.item()
-            self.embeds_ema = self.momentum * self.embeds_ema + (1 - self.momentum) * embeds_loss.item()
+            self.clip_ema = (
+                self.momentum * self.clip_ema + (1 - self.momentum) * clip_loss.item()
+            )
+            self.embeds_ema = (
+                self.momentum * self.embeds_ema
+                + (1 - self.momentum) * embeds_loss.item()
+            )
 
         # Dynamic gamma: balance to match EMA scales
         dynamic_gamma = (self.clip_ema + self.eps) / (self.embeds_ema + self.eps)
@@ -466,7 +483,7 @@ class CombinedLoss(torch.nn.Module):
             self.use_ema = False
         else:
             self.use_ema = True
-            
+
         if not self.use_ema:
             dynamic_gamma = 1
 

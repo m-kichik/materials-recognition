@@ -60,7 +60,9 @@ class MaterialsDataset(Dataset):
         elif isinstance(captions, list):
             self.data = captions
         else:
-            raise ValueError("Captions should be path to json file or list with captions.")
+            raise ValueError(
+                "Captions should be path to json file or list with captions."
+            )
         self.captions_key = captions_key
 
         # Categories setup
@@ -77,7 +79,9 @@ class MaterialsDataset(Dataset):
                 for item in self.data:
                     cats = item.get("category", []) or []
                     all_categories.update(cats)
-                self.cat2idx = {name: i for i, name in enumerate(sorted(all_categories))}
+                self.cat2idx = {
+                    name: i for i, name in enumerate(sorted(all_categories))
+                }
             self.num_categories = len(self.cat2idx)
 
         # Materials setup
@@ -106,14 +110,18 @@ class MaterialsDataset(Dataset):
 
         # Augmentations setup
         if isinstance(augmentations, bool) and augmentations:
-            self.augmentations = T.Compose([
-                # T.RandomResizedCrop(224, scale=(0.8, 1.0)),
-                T.RandomHorizontalFlip(p=0.25),
-                T.RandomVerticalFlip(p=0.25),
-                T.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
-                T.RandomGrayscale(p=0.1),
-                T.RandomRotation(degrees=15),
-            ])
+            self.augmentations = T.Compose(
+                [
+                    # T.RandomResizedCrop(224, scale=(0.8, 1.0)),
+                    T.RandomHorizontalFlip(p=0.25),
+                    T.RandomVerticalFlip(p=0.25),
+                    T.ColorJitter(
+                        brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1
+                    ),
+                    T.RandomGrayscale(p=0.1),
+                    T.RandomRotation(degrees=15),
+                ]
+            )
         else:
             self.augmentations = augmentations
 
@@ -160,9 +168,9 @@ class MaterialsDataset(Dataset):
 
         # Embeddings
         if self.load_embeddings:
-            emb_name = item['image'].rsplit('.', 1)[0].split('_')[0]
+            emb_name = item["image"].rsplit(".", 1)[0].split("_")[0]
             emb_path = f"{self.embeddings_dir}/{emb_name}.pkl"
-            with open(emb_path, 'rb') as f:
+            with open(emb_path, "rb") as f:
                 emb = torch.tensor(pickle.load(f))
             if emb.dim() == 1:
                 ret_vals["embeddings"] = emb

@@ -7,11 +7,7 @@ from .train import (
     train_reclip_iterations,
     train_fusion_iterations,
 )
-from .evaluation import (
-    evaluate, 
-    evaluate_fusion_lazy, 
-    evaluate_embeddings
-)
+from .evaluation import evaluate, evaluate_fusion_lazy, evaluate_embeddings
 
 __all__ = [
     "train",

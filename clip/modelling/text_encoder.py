@@ -26,9 +26,7 @@ class TextEncoder(nn.Module):
 
     def encode_text(self, captions: List[str]):
         embeddings = self.model.encode(captions)
-        normalized_embeddings = nn.functional.normalize(
-            torch.tensor(embeddings), dim=1
-        )
+        normalized_embeddings = nn.functional.normalize(torch.tensor(embeddings), dim=1)
         return normalized_embeddings
 
     def forward(
